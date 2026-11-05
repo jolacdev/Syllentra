@@ -83,7 +83,7 @@
     "retryExportHint": "El texto se conserva durante esta sesión. Reintenta los archivos fallidos para guardar las salidas pendientes sin volver a transcribir.",
     "setupTitle": "Preparar la transcripción local",
     "setupHint": "Descarga Phonon-2.5 Multilingual una vez (156 MB). Después podrás transcribir sin conexión.",
-    "setupWorking": "Descargando y preparando el modelo de voz. La primera preparación puede tardar unos minutos.",
+    "setupWorking": "Descargando y preparando el modelo…",
     "downloadModel": "Descargar y preparar",
     "retrySetup": "Reintentar preparación",
     "prepareFirst": "Prepara el modelo de voz de arriba antes de empezar.",
@@ -128,6 +128,7 @@
     "quitHint": "Se detendrá el trabajo activo y se cancelarán las grabaciones pendientes. Se perderán las vistas previas con salidas sin guardar. Se conservarán los archivos ya exportados.",
     "keepOpen": "Mantener abierto",
     "stopAndQuit": "Detener y salir",
+    "stoppingAndQuitting": "Deteniendo…",
     "done": "Listo",
     "status": {
       "ready": "Listo",
@@ -188,7 +189,8 @@
     "chooseModelStorage": "Elegir carpeta de descarga",
     "backupModel": "Crear copia del modelo",
     "expand": "Ampliar",
-    "portableHelp": "Syllentra Data es una carpeta que debes crear junto a Syllentra.app en macOS o junto a Syllentra.exe en Windows. Puedes crearla después del primer uso; cierra y vuelve a abrir la aplicación para activarla. Una carpeta portátil vacía inicia ajustes nuevos y ningún modelo seleccionado. Los ajustes y modelos anteriores permanecen en su ubicación. Antes de reiniciar, puedes crear una copia del modelo en la nueva carpeta; después, selecciona esa copia con Usar modelo local.",
+    "dataDirectory": "Carpeta de datos de la aplicación",
+    "portableHelp": "Syllentra crea Syllentra Data junto a la aplicación. Traslada ambas juntas. Si el almacenamiento portátil no está disponible, se usa la carpeta de datos del sistema. Los modelos existentes permanecen en su ubicación; crea una copia dentro de la carpeta de datos y selecciónala antes de trasladar la aplicación.",
     "newBatchHint": "Inicia un lote vacío y restablece las opciones de exportación. Conserva los archivos originales y las transcripciones guardadas.",
     "fileProgress": "Progreso de transcripción",
     "fileProgressHint": "Se basa en el audio transcrito del archivo actual. Se actualiza tras cada segmento. La carga del modelo y la preparación del audio no tienen un porcentaje de transcripción.",
@@ -223,6 +225,11 @@
     },
     "batchFinishedCount": "{{done}} de {{total}} archivos finalizados",
     "batchProgressHint": "Se basa en los archivos finalizados: completados, omitidos, fallidos y cancelados. La duración no afecta a este porcentaje.",
-    "waitingFile": "Preparando la siguiente grabación…"
+    "waitingFile": "Preparando la siguiente grabación…",
+    "setupCancelling": "Cancelando la preparación del modelo…",
+    "setupProgressHint": "La descarga y preparación pueden tardar unos minutos.",
+    "summaryTitle": "Resultados del lote",
+    "summaryElapsed": "Tiempo empleado {{time}}",
+    "fileTiming": "Duración {{duration}} · Tiempo de procesamiento {{processing}}"
   }
 }

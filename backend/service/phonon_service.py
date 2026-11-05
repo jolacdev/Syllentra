@@ -20,6 +20,7 @@ import fermion
 import numpy as np
 from numpy.typing import NDArray
 
+from constants import MODEL_FOLDER
 from schemas.batch import InferenceOutput, ModelInfo
 from service.engine import CancelledError
 from utils.audio_utils import SAMPLE_RATE, prepare_audio
@@ -37,7 +38,6 @@ type WorkerConnection = _PlatformConnection
 
 REPORT_INTERVAL = 0.25
 MODEL_ID = "FermionResearch/Phonon-2.5"
-MODEL_FOLDER = "model_phonon25_f25x1_48k_int6"
 # These members belong to the canonical profile pinned by fermion-research 0.2.15.
 MODEL_FILES = {
     "config.json": "b8ee2310784b2ffb62200bc9d2301cdc0576141ee9c53f7a41a5a2d181910cc9",

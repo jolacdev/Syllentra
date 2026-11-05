@@ -95,16 +95,22 @@ class TranscriptionService:
         self._scan_cancel = Event()
         self._plan: BatchPlan | None = None
         self._started = 0.0
+        self._setup_started = 0.0
         self._last_scan_report = 0.0
         self._state: BatchAppState = {
             "revision": 0,
             "collectionRevision": 0,
             "modelInfo": engine.get_info(),
-            "modelLocation": location or {"path": "", "downloadDirectory": ""},
+            "modelLocation": location
+            or {"path": "", "downloadDirectory": "", "dataDirectory": str(directory)},
             "preferences": preferences,
             "exportSettings": {"formats": ["srt"], "destination": None},
             "scan": empty_scan(),
-            "model": {"status": "ready" if engine.is_ready() else "missing", "error": None},
+            "model": {
+                "status": "ready" if engine.is_ready() else "missing",
+                "error": None,
+                "elapsedSeconds": 0.0,
+            },
             "batch": empty_batch(),
             "notice": notice,
             "closeRequested": False,
@@ -118,7 +124,10 @@ class TranscriptionService:
     def snapshot(self) -> BatchAppState:
         """Read a consistent lightweight state revision without copying the file collection."""
         with self._lock:
-            return deepcopy(self._state)
+            state = deepcopy(self._state)
+            if state["model"]["status"] in ("preparing", "cancelling"):
+                state["model"]["elapsedSeconds"] = monotonic() - self._setup_started
+            return state
 
     def workspace(self) -> Workspace:
         """Read collection metadata only when requested by its revision."""
@@ -133,7 +142,7 @@ class TranscriptionService:
         with self._lock:
             self._state["revision"] += 1
             self._state["collectionRevision"] = self._files.revision
-            snapshot = deepcopy(self._state)
+            snapshot = self.snapshot()
             callback = self._publish_callback
         if callback is not None:
             try:
@@ -447,7 +456,7 @@ class TranscriptionService:
             item.update({"status": "failed", "error": str(error), "errorStage": stage})
             if fatal:
                 with self._lock:
-                    self._state["model"] = {"status": "failed", "error": str(error)}
+                    self._state["model"] = {"status": "failed", "error": str(error), "elapsedSeconds": 0.0}
         self._count_outcome(item)
         return fatal
 
@@ -521,6 +530,7 @@ class TranscriptionService:
                 self._state["model"] = {
                     "status": "ready" if self.engine.is_ready() else "missing",
                     "error": None,
+                    "elapsedSeconds": 0.0,
                 }
                 self._operation = None
             self._publish()
@@ -531,7 +541,8 @@ class TranscriptionService:
             self._require_idle()
             self._operation = "setup"
             self._cancel.clear()
-            self._state["model"] = {"status": "preparing", "error": None}
+            self._setup_started = monotonic()
+            self._state["model"] = {"status": "preparing", "error": None, "elapsedSeconds": 0.0}
             thread = Thread(target=self._setup, daemon=True)
             self._thread = thread
         self._publish()
@@ -554,6 +565,7 @@ class TranscriptionService:
             self._state["model"] = {
                 "status": "failed" if state == "failed" else "ready" if state == "ready" else "missing",
                 "error": error,
+                "elapsedSeconds": monotonic() - self._setup_started,
             }
             self._operation = None
         self._publish()

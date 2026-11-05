@@ -6,8 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from constants import MODEL_FOLDER
 from service.model_storage_service import ModelStorageService
-from service.phonon_service import MODEL_FOLDER, PhononEngine
+from service.phonon_service import PhononEngine
 
 
 class ModelStorageTests(unittest.TestCase):

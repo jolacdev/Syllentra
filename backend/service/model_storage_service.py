@@ -5,8 +5,9 @@ import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from constants import MODEL_FOLDER
 from schemas.batch import ModelLocation
-from service.phonon_service import MODEL_FILES, MODEL_FOLDER, PhononEngine
+from service.phonon_service import MODEL_FILES, PhononEngine
 
 
 class ModelStorageService:
@@ -29,7 +30,11 @@ class ModelStorageService:
 
     def location(self) -> ModelLocation:
         """Describe the actual model path and the chosen root for future downloads."""
-        return {"path": str(self.engine.model_path), "downloadDirectory": str(self.engine.directory)}
+        return {
+            "path": str(self.engine.model_path),
+            "downloadDirectory": str(self.engine.directory),
+            "dataDirectory": str(self.data),
+        }
 
     def _save(self) -> None:
         """Store relocatable paths for assets inside portable data and absolute external references."""

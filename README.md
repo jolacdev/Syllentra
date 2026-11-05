@@ -10,6 +10,10 @@ Local batch transcription of audio and video with **Phonon-2.5 Multilingual**, u
 4. Review existing outputs with one skip, overwrite, or rename decision per recording, then start the batch.
 5. Follow the current recording’s transcription percentage, measured from completed audio segments. Cancel the current recording or stop the queue as needed. Inspect results, **Expand** the read-only preview, copy text, and open or reveal exported files.
 
+Model setup shows status and elapsed time. Finished batches show outcome counts and time spent. File details include duration and processing time.
+
+Closing during active work asks for confirmation. **Keep open** continues processing; **Stop & quit** stops the work before closing and preserves files already exported.
+
 Silence produces no empty outputs. Recoverable file errors allow the queue to continue; model-loading failures halt it. Failed exports can reuse the session transcript. Selections and previews last for the session; saved exports persist. Clearing or quitting protects transcripts with unsaved outputs. Settings supports English/Spanish and system/light/dark appearance, and lists the active model’s supported spoken languages.
 
 ## Models and portable storage
@@ -20,28 +24,15 @@ Settings shows the active model path and download storage folder:
 - **Choose download folder** switches storage without moving or deleting older copies. Downloads use `speech/FermionResearch__Phonon-2.5/model_phonon25_f25x1_48k_int6` within that folder. Choose a download folder before downloading a replacement for an externally referenced model.
 - **Back up model** creates a verified folder containing the model assets and attribution. Transfer it to another machine and select it with **Use local model**. Existing backups are preserved.
 
-### Enabling portable mode
+### Portable by default
 
-**Syllentra Data** is an ordinary folder you create with that exact name. It stores the app's settings, logs, and default model cache. Put it in the **same parent folder as the application**, outside the macOS app bundle:
+Syllentra automatically creates **Syllentra Data** next to the application for settings, logs, and downloaded models. Move the application and this folder together. Settings shows the active data and model folders.
 
-```text
-macOS                         Windows / Linux
-My portable apps/             My portable apps/Syllentra/
-├── Syllentra.app             ├── Syllentra.exe (or Syllentra on Linux)
-└── Syllentra Data/            ├── _internal/
-                              └── Syllentra Data/
-```
+Existing settings are copied on first use; existing models stay in place. To take an older or external model with you, use **Back up model** to save it inside `Syllentra Data`, then select the backup with **Use local model**. Existing portable data is reused without importing system settings again.
 
-1. Copy the application to its final location outside `dist`, which subsequent builds replace.
-2. Create `Syllentra Data` in the location shown above. You can do this while the app is open, including after its first use.
-3. If you want to carry the downloaded model with the app, use **Back up model** to save it into the new folder before quitting.
-4. Quit and relaunch Syllentra. Storage is selected at startup; creating the folder does not switch a running session.
+If portable storage cannot be created or written to, Syllentra uses the normal **PyWhisper Studio** system data folder. Move the application to a writable location and relaunch to use portable storage.
 
-An empty portable folder starts with fresh settings and no model selected. **Existing settings and models stay in their original location; nothing is moved or copied automatically.** In Settings, use **Use local model** to reference your existing model. To carry the model with the app, create a backup inside `Syllentra Data`, then select the resulting `model_phonon25_f25x1_48k_int6` folder with **Use local model**. You can create that backup before quitting the original session or after selecting the existing model in the portable session.
-
-Move the application and `Syllentra Data` together. Model references inside that folder are stored relatively; references to models elsewhere still depend on those external locations. Session temporary files use the OS temporary directory.
-
-Normal installations retain the **PyWhisper Studio** platform data directory for compatibility. `SYLLENTRA_DATA_DIR` overrides storage; `PYWHISPER_DATA_DIR` remains supported. Existing Whisper caches are unused and left intact. Legacy appearance settings receive a one-time backup when migrated settings are saved.
+`SYLLENTRA_DATA_DIR` overrides storage; `PYWHISPER_DATA_DIR` remains supported. These overrides bypass automatic migration. Original system data is preserved.
 
 ## Development
 
@@ -54,7 +45,7 @@ pnpm dev:frontend
 pnpm dev:backend
 ```
 
-Initialization installs both JavaScript dependency trees and the target's hash-locked Python dependencies in `.venv`. Use `pnpm start` for the compiled frontend, or `pnpm build` for a native candidate in `dist/`. Building replaces `dist`, so keep portable user data elsewhere.
+Initialization installs both JavaScript dependency trees and the target's hash-locked Python dependencies in `.venv`. Use `pnpm start` for the compiled frontend, or `pnpm build` for a native candidate in `dist/`. Development stores data in the Git-ignored `Syllentra Data` folder at the repository root. Builds replace `dist`; move packaged applications elsewhere before first use.
 
 Targets: macOS arm64 (14+), Windows x64, and Linux x64. Intel macOS is deferred because of the Python/runtime dependency combination. Windows needs .NET/WebView2; see [Windows builds](docs/WINDOWS_BUILD.md). Linux uses PySide6/QtWebEngine; Ubuntu 24.04 needs `libegl1 libgl1 libnss3 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0`.
 

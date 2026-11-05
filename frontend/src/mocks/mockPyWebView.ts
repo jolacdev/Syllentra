@@ -68,7 +68,6 @@ export const createPyWebViewMock = () => {
     closeRequested: false,
     collectionRevision: 0,
     exportSettings: { destination: null, formats: ['srt'] },
-    model: { error: null, status: scenario ? 'ready' : 'missing' },
     notice: null,
     preferences: { interfaceLanguage: 'system', theme: 'system', version: 2 },
     revision: 0,
@@ -85,6 +84,11 @@ export const createPyWebViewMock = () => {
       skipped: 0,
       status: 'idle',
       total: 0,
+    },
+    model: {
+      elapsedSeconds: 0,
+      error: null,
+      status: scenario ? 'ready' : 'missing',
     },
     modelInfo: {
       name: 'Phonon-2.5 Multilingual',
@@ -118,6 +122,7 @@ export const createPyWebViewMock = () => {
       ],
     },
     modelLocation: {
+      dataDirectory: '/Preview/Syllentra Data',
       downloadDirectory: '/Preview/Models',
       path: '/Preview/Models/model_phonon25_f25x1_48k_int6',
     },
@@ -403,12 +408,14 @@ export const createPyWebViewMock = () => {
       return success();
     },
     setup_model: () => {
+      state.model.elapsedSeconds = 0;
       state.model.status = 'preparing';
       emit();
       setupTimer = window.setTimeout(() => {
         state.model.status = 'ready';
+        state.model.elapsedSeconds = 6;
         emit();
-      }, 1000);
+      }, 6000);
       return success();
     },
     start_batch: (planId) => {
@@ -424,6 +431,7 @@ export const createPyWebViewMock = () => {
         id: crypto.randomUUID(),
         cancelled: 0,
         completed: 0,
+        elapsedSeconds: 0,
         failed: 0,
         noSpeech: 0,
         skipped: 0,

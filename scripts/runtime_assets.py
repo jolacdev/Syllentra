@@ -26,7 +26,9 @@ def is_platform_library(path: str) -> bool:
     if sys.platform == "darwin":
         return f"-macos-{machine}" in Path(path).name
     if sys.platform == "win32":
-        return "-windows-x64" in Path(path).name and machine in ("amd64", "x86_64")
+        return machine in ("amd64", "x86_64") and (
+            "-windows-x64" in Path(path).name or Path(path).name == "phonon_cpu-win-x86_64.dll"
+        )
     architecture = "aarch64" if machine in ("aarch64", "arm64") else "x86_64"
     return f"-linux-{architecture}" in Path(path).name
 

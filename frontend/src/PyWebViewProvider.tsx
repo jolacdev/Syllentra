@@ -6,10 +6,15 @@ import Icon from '@components/Icon';
 
 import { createPyWebViewMock } from './mocks/mockPyWebView';
 
+/** The API object exists before pywebview finishes installing commands and shared state. */
+const isBridgeReady = () =>
+  typeof window.pywebview?.api?.get_state === 'function' &&
+  typeof window.pywebview?.state?.addEventListener === 'function';
+
 /** Wait for the native bridge; browser preview must be enabled explicitly. */
 const PyWebViewProvider = ({ children }: { children: ReactNode }) => {
   const { t } = useTranslation();
-  const [isReady, setIsReady] = useState(!!window.pywebview?.api);
+  const [isReady, setIsReady] = useState(isBridgeReady);
   useEffect(() => {
     if (
       import.meta.env.DEV &&
@@ -17,11 +22,9 @@ const PyWebViewProvider = ({ children }: { children: ReactNode }) => {
     ) {
       createPyWebViewMock();
     }
-    const ready = () => setIsReady(true);
+    const ready = () => setIsReady(isBridgeReady());
     window.addEventListener('pywebviewready', ready);
-    if (window.pywebview?.api) {
-      ready();
-    }
+    ready();
     return () => window.removeEventListener('pywebviewready', ready);
   }, []);
   if (isReady) {

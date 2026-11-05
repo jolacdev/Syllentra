@@ -47,7 +47,7 @@ describe('batch progress', () => {
     expect(queue.getByRole('progressbar')).toHaveAttribute('max', '5');
     expect(queue.getByText('80%')).toBeVisible();
     expect(queue.getByText('4 of 5 files finished')).toBeVisible();
-    expect(queue.getByText('1:05 elapsed')).toBeVisible();
+    expect(queue.getByText('00:01:05 elapsed')).toBeVisible();
   });
 
   it.each([

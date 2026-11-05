@@ -32,6 +32,7 @@ export type ModelInfo = {
 export type ModelLocation = {
   path: string;
   downloadDirectory: string;
+  dataDirectory: string;
 };
 
 export type InterfacePreferences = {
@@ -57,6 +58,7 @@ export type ScanState = {
 export type ModelState = {
   status: "missing" | "preparing" | "cancelling" | "ready" | "failed";
   error: string | null;
+  elapsedSeconds: number;
 };
 
 export type BatchState = {

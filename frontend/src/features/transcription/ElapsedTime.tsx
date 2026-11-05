@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { formatDuration } from '@utils/formatDuration';
+
 type ElapsedTimeProps = { seconds: number; isRunning: boolean };
 
 /** Advance the backend's measured elapsed time locally without sending synthetic inference progress. */
@@ -25,7 +27,7 @@ const ElapsedTime = ({ seconds, isRunning }: ElapsedTimeProps) => {
   const elapsed = Math.floor(
     seconds + (isRunning && clock.seconds === seconds ? clock.additional : 0),
   );
-  const time = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
+  const time = formatDuration(elapsed);
   return (
     <span className="text-ink/65 text-xs tabular-nums">
       {t('batch.elapsed', { time })}

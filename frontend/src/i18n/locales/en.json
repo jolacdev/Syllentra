@@ -83,7 +83,7 @@
     "retryExportHint": "Your transcript is retained for this session. Retry failed files to save the missing outputs without transcribing again.",
     "setupTitle": "Prepare local transcription",
     "setupHint": "Download Phonon-2.5 Multilingual once (156 MB). After setup, recordings are transcribed offline.",
-    "setupWorking": "Downloading and preparing the speech model. First setup may take a few minutes.",
+    "setupWorking": "Downloading and preparing the model…",
     "downloadModel": "Download & prepare",
     "retrySetup": "Retry setup",
     "prepareFirst": "Prepare the speech model above before starting.",
@@ -128,6 +128,7 @@
     "quitHint": "Active work will stop and queued recordings will be cancelled. Session previews with unsaved outputs will be lost. Files already exported are kept.",
     "keepOpen": "Keep open",
     "stopAndQuit": "Stop & quit",
+    "stoppingAndQuitting": "Stopping…",
     "done": "Done",
     "status": {
       "ready": "Ready",
@@ -188,7 +189,8 @@
     "chooseModelStorage": "Choose download folder",
     "backupModel": "Back up model",
     "expand": "Expand",
-    "portableHelp": "Syllentra Data is a folder you create next to Syllentra.app on macOS, or next to Syllentra.exe on Windows. You can create it after first use; quit and reopen the app to enable it. An empty portable folder starts with fresh settings and no model selected. Existing settings and models stay in their original location. Before restarting, you can back up your model into the new folder; after restarting, select that backup using “Use local model”.",
+    "dataDirectory": "Application data folder",
+    "portableHelp": "Syllentra creates Syllentra Data next to the application. Move both together. If portable storage is unavailable, system storage is used instead. Existing models stay in place; back them up inside the data folder and select the backup before moving the app.",
     "newBatchHint": "Start an empty batch and reset export choices. Source files and saved transcripts are preserved.",
     "fileProgress": "Transcription progress",
     "fileProgressHint": "Based on audio transcribed in the current file. Updates after each audio segment. Loading the model and preparing audio have no transcription percentage.",
@@ -223,6 +225,11 @@
     },
     "batchFinishedCount": "{{done}} of {{total}} files finished",
     "batchProgressHint": "Based on finished files, including completed, skipped, failed and cancelled files. File duration does not affect this percentage.",
-    "waitingFile": "Preparing the next recording…"
+    "waitingFile": "Preparing the next recording…",
+    "setupCancelling": "Cancelling model preparation…",
+    "setupProgressHint": "Download and preparation may take a few minutes.",
+    "summaryTitle": "Batch results",
+    "summaryElapsed": "Time spent {{time}}",
+    "fileTiming": "Duration {{duration}} · Processing time {{processing}}"
   }
 }

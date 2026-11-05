@@ -100,6 +100,25 @@ class BatchServiceTests(unittest.TestCase):
         self.service.start_batch(plan["id"])
         self.assertTrue(self.settled.wait(3), "Queue did not settle")
 
+    def test_close_stops_transcription_and_cancels_the_queue(self) -> None:
+        """A close warning preserves work until confirmation, then cleanup settles the active batch."""
+        self._import("a.wav", "b.wav")
+        self.engine.blocked_name = "a.wav"
+        plan = self.service.prepare_batch()
+        self.service.start_batch(plan["id"])
+        self.assertTrue(self.engine.started.wait(2))
+        self.service.request_close(True)
+        self.assertTrue(self.service.is_busy())
+        self.assertFalse(self.service._cancel.is_set())
+        self.service.request_close(False)
+        self.assertTrue(self.service.is_busy())
+        self.service.close()
+        self.assertFalse(self.service.is_busy())
+        self.assertEqual(self.engine.calls, ["a.wav"])
+        self.assertEqual(self.service.snapshot()["batch"]["cancelled"], 2)
+        self.assertFalse((self.sources / "a.srt").exists())
+        self.assertFalse((self.sources / "b.srt").exists())
+
     def test_exports_all_formats_once_per_file(self) -> None:
         """A serial mixed batch must produce each requested format with one inference pass."""
         self._import("a.wav", "b.mp4")
@@ -107,6 +126,8 @@ class BatchServiceTests(unittest.TestCase):
         self._start()
         self.assertEqual(self.engine.calls, ["a.wav", "b.mp4"])
         self.assertEqual(self.service.snapshot()["batch"]["completed"], 2)
+        batch = self.service.snapshot()["batch"]
+        self.assertGreater(batch["elapsedSeconds"], 0)
         self.assertTrue((self.sources / "a.vtt").read_text().startswith("WEBVTT\n\n"))
         self.assertEqual((self.sources / "b.txt").read_text(), "Recorded speech.\n")
 
@@ -255,6 +276,40 @@ class BatchServiceTests(unittest.TestCase):
         self.assertEqual(self.service.snapshot()["model"]["status"], "ready")
         self.assertEqual(len(self.service.workspace()["items"]), 1)
         self.assertEqual(self.engine.calls, [])
+
+    def test_setup_elapsed_time_survives_hydration_and_cancellation(self) -> None:
+        """A reloaded frontend must recover measured setup time while cancellation stays responsive."""
+        started = Event()
+        release = Event()
+        self.engine.ready = False
+
+        def controlled_setup(cancel: Event, _report: PhaseCallback) -> None:
+            """Hold a simulated preparation operation without downloading or loading native code."""
+            started.set()
+            release.wait(2)
+            if cancel.is_set():
+                raise CancelledError
+
+        with (
+            patch.object(self.engine, "setup", side_effect=controlled_setup),
+            patch("service.transcription_service.monotonic", return_value=100.0) as clock,
+        ):
+            self.settled.clear()
+            self.service.setup_model()
+            try:
+                self.assertTrue(started.wait(1))
+                clock.return_value = 112.0
+                self.assertEqual(self.service.snapshot()["model"]["elapsedSeconds"], 12)
+                clock.return_value = 125.0
+                self.service.cancel_setup()
+                model = self.service.snapshot()["model"]
+                self.assertEqual(model["status"], "cancelling")
+                self.assertEqual(model["elapsedSeconds"], 25)
+            finally:
+                release.set()
+            self.assertTrue(self.settled.wait(1))
+            self.assertEqual(self.service.snapshot()["model"]["status"], "missing")
+            self.assertEqual(self.service.snapshot()["model"]["elapsedSeconds"], 25)
 
     def test_source_changes_after_preflight_fail_as_source_errors(self) -> None:
         """An admitted fingerprint must be rechecked immediately before inference."""

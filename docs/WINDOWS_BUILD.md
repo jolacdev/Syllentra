@@ -20,7 +20,9 @@ Distribute the **entire `dist\Syllentra` folder**, containing `Syllentra.exe` an
 
 Recipients need pywebview's [.NET Framework and WebView2 prerequisites](https://github.com/r0x0r/pywebview/blob/master/docs/guide/installation.md). Microsoft's [WebView2 distribution guide](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution) covers offline installers for machines without the runtime.
 
-Transfer a verified model backup and choose **Use local model** for offline first use. For portable settings/model storage, follow the [portable-mode steps](../README.md#enabling-portable-mode). Create **Syllentra Data** beside `Syllentra.exe`, inside the distributed application folder. Quit and relaunch after creating it; existing settings and models are not migrated automatically.
+Move the application folder out of `dist` before first use. **Syllentra Data** is created automatically next to the application. Move the entire folder when transferring the app; exclude personal data when distributing a fresh copy.
+
+For offline first use, transfer a verified model backup and select it with **Use local model**. See [portable storage](../README.md#portable-by-default) for upgrades and system-storage fallback.
 
 ## GitHub Actions
 

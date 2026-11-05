@@ -30,6 +30,8 @@ Completed inference is retained before export. A failed export can retry without
 
 Snapshots are copied under locks and published outside them. Transport failures cannot change transcription outcomes. Small `BatchAppState` snapshots carry monotonic state/collection revisions; a bounded row-change journal provides collection deltas, with full-snapshot recovery after structural changes or stale cursors.
 
+The pinned pywebview 6.1 embeds initial shared state in an unescaped JavaScript string. Windows backslashes, apostrophes, and newlines can break that injection. `PyWebViewApi` keeps shared state empty during `before_load`, then publishes the latest snapshot on `loaded` as a serialized JSON object through pywebview's state proxy. Native state mutation is locked against initialization; JavaScript execution stays outside that lock because `before_load` runs on the GUI thread. The same lifecycle applies to reloads; updates during loading are recovered from the service snapshot. React waits for both native commands and the shared-state event interface before mounting the workspace.
+
 ## Inference and media
 
 `TranscriptionEngine` defines model metadata, readiness, explicit setup, transcription, and close. Each engine supplies its model identity, source URL, and supported language codes; the interface localizes the language names. Vendor values stay inside the Phonon adapter; JSON-only `TypedDict` schemas define application transport. A narrow Fermion stub supports strict MyPy checks against the pinned public speech API.
@@ -48,7 +50,7 @@ Exports use temporary sibling files and independent atomic publication. Overwrit
 
 `BatchWorkspaceScreen` composes selection, exports, queue controls, previews, and dialogs. Inclusion, expansion, keyboard focus, and inspection are separate. The tree renders expanded branches with ARIA hierarchy metadata and roving keyboard focus. Expanded preview uses a wide native dialog; one conflict action applies to each recording's existing output set.
 
-Queue state, export choices, and previews are session scoped. Interface preferences and model locations persist separately. Portable data selection and user-facing storage behavior are documented in [README.md](../README.md#models-and-portable-storage).
+Queue state, export choices, and previews are session scoped. Settings and model locations persist in automatically created portable storage. First initialization atomically copies legacy settings and rebases model references without copying weights. Existing portable data wins; initialization/write failures use system storage, and environment overrides bypass migration. Settings shows the active data directory. See [portable storage](../README.md#portable-by-default).
 
 ## Packaging
 

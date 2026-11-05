@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import Button from '@components/Button';
+import { formatDuration } from '@utils/formatDuration';
 import { formatSizeUnit } from '@utils/formatSizeUnit';
 import type { MediaItem } from 'types/pywebview/pywebview-api';
 
@@ -47,6 +48,14 @@ const ResultInspector = ({
         <p className="text-ink/65 mt-1 text-xs">
           {formatSizeUnit(item.size)} · {item.extension.toUpperCase().slice(1)}
         </p>
+        {page && (
+          <p className="text-ink/65 mt-2 text-xs tabular-nums">
+            {t('batch.fileTiming', {
+              duration: formatDuration(page.duration),
+              processing: formatDuration(page.processingSeconds),
+            })}
+          </p>
+        )}
         <details className="text-ink/65 mt-2 text-xs">
           <summary className="cursor-pointer">
             {t('batch.sourceLocation')}

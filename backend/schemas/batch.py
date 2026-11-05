@@ -160,6 +160,7 @@ class ModelState(TypedDict):
 
     status: Literal["missing", "preparing", "cancelling", "ready", "failed"]
     error: str | None
+    elapsedSeconds: float
 
 
 class BatchState(TypedDict):
@@ -192,6 +193,7 @@ class ModelLocation(TypedDict):
 
     path: str
     downloadDirectory: str
+    dataDirectory: str
 
 
 class BatchAppState(TypedDict):

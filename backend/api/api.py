@@ -1,9 +1,11 @@
 """Expose typed native commands while application services own all batch decisions."""
 
+import json
 import logging
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+from threading import Lock, Thread
 
 import webview
 from webview.dom import DOMEventHandler
@@ -72,19 +74,45 @@ class PyWebViewApi:
         self._window: webview.Window | None = None
         self._drop_element: Element | None = None
         self._allow_close = False
+        self._bridge_lock = Lock()
+        self._bridge_ready = False
 
     def _attach(self, window: webview.Window) -> None:
         """Publish top-level snapshots and preserve drop/close lifecycle across frontend reloads."""
         self._window = window
-        window.events.loaded += self._reset_dropzone
+        window.events.before_load += self._prepare_bridge
+        window.events.loaded += self._on_loaded
         window.events.closing += self._on_closing
         window.events.closed += self._service.close
         self._service.subscribe(self._publish_state)
+
+    def _prepare_bridge(self) -> None:
+        """Keep pywebview 6.1's unescaped initial-state script free of paths and user text."""
+        with self._bridge_lock:
+            self._bridge_ready = False
+            self._get_window().state.clear()
+            self._drop_element = None
+
+    def _on_loaded(self) -> None:
+        """Hydrate every new page through pywebview's escaped runtime state updates."""
+        with self._bridge_lock:
+            self._bridge_ready = True
         self._publish_state(self._service.snapshot())
 
     def _publish_state(self, state: BatchAppState) -> None:
         """Replace one top-level property because nested pywebview mutations are not tracked."""
-        self._get_window().state.app = state
+        with self._bridge_lock:
+            if not self._bridge_ready:
+                return
+            window = self._get_window()
+            window.state.update(app=state)
+        # before_load runs on the GUI thread: never hold its lock while waiting for JavaScript.
+        # Use pywebview's halt-update key to notify JS listeners without echoing state back to Python.
+        window.run_js(
+            "if (window.pywebview && window.pywebview.state) {"
+            f"window.pywebview.state.__pywebviewHaltUpdate__app = {json.dumps(state)};"
+            "}"
+        )
 
     def _get_window(self) -> webview.Window:
         """Require the native host only for operations that actually need its UI."""
@@ -238,7 +266,8 @@ class PyWebViewApi:
         if self._allow_close:
             return True
         if self._service.is_busy() or self._service.has_unexported_results():
-            self._service.request_close(True)
+            # The synchronous native callback must return before JavaScript can display the dialog.
+            Thread(target=self._service.request_close, args=(True,), daemon=True).start()
             return False
         return True
 
@@ -255,10 +284,6 @@ class PyWebViewApi:
     def keep_open(self) -> CommandReply:
         """Dismiss a native close request and keep the current batch processing."""
         return self._command(partial(self._service.request_close, False))
-
-    def _reset_dropzone(self) -> None:
-        """Discard DOM element references when the webview reloads its page."""
-        self._drop_element = None
 
     def bind_dropzone(self) -> bool:
         """Bind the stable workspace drop region while keeping native pickers available on failure."""

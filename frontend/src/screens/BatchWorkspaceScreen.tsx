@@ -8,9 +8,11 @@ import Icon from '@components/Icon';
 import Modal from '@components/Modal';
 import Select from '@components/Select';
 import BatchProgress from '@features/transcription/BatchProgress';
+import BatchSummary from '@features/transcription/BatchSummary';
 import ConflictReviewDialog from '@features/transcription/ConflictReviewDialog';
 import ExportSettingsPanel from '@features/transcription/ExportSettingsPanel';
 import MediaTree from '@features/transcription/MediaTree';
+import ModelSetupProgress from '@features/transcription/ModelSetupProgress';
 import ResultInspector from '@features/transcription/ResultInspector';
 import { selectionState } from '@features/transcription/tree';
 import { cn } from '@utils/cn';
@@ -204,14 +206,14 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
             <Icon className="text-accent size-5 shrink-0" name="waveform" />
             <div className="min-w-48 flex-1">
               <h2 className="text-sm font-semibold">{t('batch.setupTitle')}</h2>
-              <p className="text-ink/65 mt-1 text-xs leading-5">
-                {t(
-                  state.model.status === 'preparing' ||
-                    state.model.status === 'cancelling'
-                    ? 'batch.setupWorking'
-                    : 'batch.setupHint',
-                )}
-              </p>
+              {state.model.status === 'preparing' ||
+              state.model.status === 'cancelling' ? (
+                <ModelSetupProgress model={state.model} />
+              ) : (
+                <p className="text-ink/65 mt-1 text-xs leading-5">
+                  {t('batch.setupHint')}
+                </p>
+              )}
               {state.model.error && (
                 <details className="text-danger mt-2 text-xs">
                   <summary className="cursor-pointer">
@@ -551,6 +553,7 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
                   {batch.noSpeech > 0 &&
                     ` · ${t('batch.noSpeechCount', { count: batch.noSpeech })}`}
                 </p>
+                <BatchSummary batch={batch} />
               </>
             ) : (
               <>
@@ -765,6 +768,12 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
                 {t('batch.portableHelp')}
               </p>
               <p className="mt-3 text-xs font-medium">
+                {t('batch.dataDirectory')}
+              </p>
+              <code className="text-ink/65 mt-1 block text-xs break-all">
+                {state.modelLocation.dataDirectory}
+              </code>
+              <p className="mt-3 text-xs font-medium">
                 {t('batch.modelLocation')}
               </p>
               <code className="text-ink/65 mt-1 block text-xs break-all">
@@ -866,7 +875,11 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
               variant="danger"
               onClick={() => act('quit', () => api.quit_app())}
             >
-              {t('batch.stopAndQuit')}
+              {t(
+                pending.has('quit')
+                  ? 'batch.stoppingAndQuitting'
+                  : 'batch.stopAndQuit',
+              )}
             </Button>
           </footer>
         </Modal>

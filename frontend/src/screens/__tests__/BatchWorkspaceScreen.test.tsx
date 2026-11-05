@@ -233,6 +233,8 @@ describe('batch workspace', () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(screen.getByText('Batch finished')).toBeInTheDocument();
+    const summary = screen.getByRole('group', { name: 'Batch results' });
+    expect(within(summary).getByText('Time spent 00:00:07')).toBeVisible();
     expect(
       screen.getByRole('tree', { name: 'Recordings' }),
     ).toBeInTheDocument();
@@ -242,6 +244,9 @@ describe('batch workspace', () => {
     expect(
       screen.getByText('This is a simulated transcript.'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('Duration 00:00:24 · Processing time 00:00:01'),
+    ).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Open SRT output' }),
     ).toBeEnabled();
@@ -331,11 +336,60 @@ describe('batch workspace', () => {
     ).toBeEnabled();
   });
 
+  it('keeps transcription running until quit is confirmed and shows stopping feedback', async () => {
+    /** Native close requests must offer a safe way back and prevent repeated quit commands. */
+    await setup();
+    const api = window.pywebview.api;
+    const keep = vi.spyOn(api, 'keep_open');
+    let finishQuit = () => {};
+    const quit = vi.spyOn(api, 'quit_app').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishQuit = () => resolve({ error: null });
+        }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+    await screen.findByRole('button', { name: 'Stop batch' });
+    await act(async () => {
+      window.pywebview.state.app.closeRequested = true;
+      await api.set_appearance('system', 'en');
+    });
+    let dialog = await screen.findByRole('dialog', {
+      name: 'Close Syllentra?',
+    });
+    expect(within(dialog).getByText(/Active work will stop/)).toBeVisible();
+    expect(quit).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep open' }));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(keep).toHaveBeenCalledOnce();
+    expect(window.pywebview.state.app.batch.status).toBe('running');
+    await act(async () => {
+      window.pywebview.state.app.closeRequested = true;
+      await api.set_appearance('system', 'en');
+    });
+    dialog = await screen.findByRole('dialog', { name: 'Close Syllentra?' });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Stop & quit' }),
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Stopping…' }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByRole('button', { name: 'Keep open' }),
+    ).toBeDisabled();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(keep).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+    await act(async () => finishQuit());
+  });
+
   it('shows engine-owned spoken-language coverage in settings', async () => {
     /** Model coverage must be discoverable independently of the interface language setting. */
     await setup();
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     const dialog = await screen.findByRole('dialog', { name: 'Settings' });
+    expect(within(dialog).getByText('Application data folder')).toBeVisible();
+    expect(within(dialog).getByText('/Preview/Syllentra Data')).toBeVisible();
     fireEvent.click(
       within(dialog).getByText('Supported spoken languages (25)'),
     );
@@ -391,6 +445,43 @@ describe('batch workspace', () => {
     expect(
       screen.queryByRole('button', { name: 'Download & prepare' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows model setup feedback and allows cancelling the download', async () => {
+    /** Preparation disables conflicting edits while keeping visible feedback and cancellation available. */
+    window.history.replaceState({}, '', '?preview');
+    Object.defineProperty(window, 'pywebview', {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+    createPyWebViewMock();
+    render(<App />);
+    await screen.findByRole('button', { name: 'Download & prepare' });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Download & prepare' }),
+      );
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Downloading and preparing the model…'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add files' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(
+      screen.queryByText('Downloading and preparing the model…'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download & prepare' }),
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add files' })).toBeEnabled();
   });
 });
 
