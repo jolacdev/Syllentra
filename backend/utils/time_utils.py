@@ -1,13 +1,5 @@
 def format_seconds_to_srt_time(seconds: float) -> str:
-    """
-    Converts a timestamp in seconds to SRT subtitle format (HH:MM:SS,mmm).
-
-    Args:
-        seconds (float): Time in seconds.
-
-    Returns:
-        str: Formatted timestamp string in SRT format.
-    """
+    """Format rounded milliseconds as subtitle timestamps, including hour boundaries."""
 
     total_milliseconds = int(round(seconds * 1000))
 

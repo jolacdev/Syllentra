@@ -1,6 +1,7 @@
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from platformdirs import user_log_dir
 
@@ -10,7 +11,7 @@ def setup_logging(
     filename: str = "app.log",
     enable_logging: bool = True,
     log_level: int = logging.DEBUG,
-    max_bytes: int = 5 * 1024 * 1024,  # 5 MB
+    directory: Path | None = None,
 ) -> None:
     """Sets up logging configuration for the application. Outputs to both console and rotating file."""
 
@@ -33,14 +34,16 @@ def setup_logging(
     )
 
     # Log Absolute Path
-    log_dir = user_log_dir(app_name)
+    log_dir = str(directory) if directory is not None else user_log_dir(app_name)
     log_file_path = os.path.join(log_dir, filename)
 
     # Ensure log directory exists
     os.makedirs(log_dir, exist_ok=True)
 
     # Rotating file handler
-    file_handler = RotatingFileHandler(log_file_path, maxBytes=max_bytes, backupCount=1, encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        log_file_path, maxBytes=5 * 1024 * 1024, backupCount=1, encoding="utf-8"
+    )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
 

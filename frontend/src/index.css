@@ -1,64 +1,110 @@
 @import 'tailwindcss';
-@plugin 'daisyui';
 
-/* NOTE: https://daisyui.com/docs/themes/#-7 */
-/* Enable only 'business' theme. */
-@plugin 'daisyui' {
-  themes: business;
+/* Five roles define the palette; opacity utilities create borders and tonal variants. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
 }
-
-/* Customize 'business' theme. */
-@plugin 'daisyui/theme' {
-  name: 'business';
-  default: true;
-  --color-primary: #209a58;
+:root {
+  color-scheme: light;
+  --canvas: #f6f6f2;
+  --surface: #ffffff;
+  --ink: #242d29;
+  --accent: #287353;
+  --danger: #a63632;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
-
-[data-theme='business'] {
-  .btn {
-    &:active,
-    &.btn-active {
-      translate: 0 1px;
-    }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --canvas: #191a1c;
+    --surface: #232426;
+    --ink: #ececee;
+    --accent: #75c59a;
+    --danger: #f4aaa2;
   }
-
-  .btn-ghost {
-    border-width: 0;
-    box-shadow: none;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #191a1c;
+  --surface: #232426;
+  --ink: #ececee;
+  --accent: #75c59a;
+  --danger: #f4aaa2;
+}
+@layer base {
+  body {
+    @apply bg-canvas text-ink m-0 min-w-90;
+  }
+  button,
+  select,
+  summary,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+  ::selection {
+    @apply bg-accent/20 text-ink;
+  }
+  progress {
+    @apply bg-ink/12 appearance-none overflow-hidden rounded-full border-0;
+  }
+  progress::-webkit-progress-bar {
+    @apply bg-ink/12 rounded-full;
+  }
+  progress::-webkit-progress-value {
+    @apply bg-accent rounded-full;
+    transition: width 250ms;
+  }
+  progress::-moz-progress-bar {
+    @apply bg-accent;
+  }
+  progress:indeterminate {
+    background: linear-gradient(
+      90deg,
+      transparent 20%,
+      var(--accent) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: progress-sweep 2s linear infinite;
+  }
+  progress:indeterminate::-webkit-progress-bar {
     background: transparent;
   }
 }
-
-@theme {
-  --color-charcoal-50: #f1f1f1;
-  --color-charcoal-100: #e2e2e2;
-  --color-charcoal-200: #c9c9c9;
-  --color-charcoal-300: #aeaeae;
-  --color-charcoal-400: #969696;
-  --color-charcoal-500: #7c7c7c;
-  --color-charcoal-600: #666666;
-  --color-charcoal-700: #4e4e4e;
-  --color-charcoal-800: #393939;
-  --color-charcoal-900: #242424;
-  --color-charcoal-950: #151515;
-
-  --color-leaf-50: #e9ffef;
-  --color-leaf-100: #c5fed6;
-  --color-leaf-200: #83feaf;
-  --color-leaf-300: #39f58f;
-  --color-leaf-400: #35e887;
-  --color-leaf-500: #31d97e;
-  --color-leaf-600: #2dc975;
-  --color-leaf-700: #2abd6d;
-  --color-leaf-800: #25ae64;
-  --color-leaf-900: #22a25d;
-  --color-leaf-950: #209a58;
+@keyframes progress-sweep {
+  to {
+    background-position: -200% 0;
+  }
 }
-
-body {
-  margin: 0 auto;
-  max-width: 80rem; /* 1280px */
-  font-family:
-    'Helvetica', 'Arial', ui-sans-serif, system-ui, sans-serif,
-    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+@keyframes copy-pop {
+  50% {
+    transform: scale(1.3);
+  }
+}
+.copy-confirmation svg {
+  animation: copy-pop 220ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

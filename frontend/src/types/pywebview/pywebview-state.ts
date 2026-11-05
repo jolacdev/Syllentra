@@ -1,37 +1,18 @@
-import { FileMetadata } from './pywebview-api';
+import type { BridgeState } from './pywebview-api';
 
-// NOTE: This type has to be sync with the backend PyWebViewState state attributes.
-export type PyWebViewStateProperties = {
-  transcriptionFile: FileMetadata | null;
+export type PyWebViewStateEvent = CustomEvent<{
+  key: 'app';
+  value: BridgeState['app'];
+}>;
+
+/** Add transport events to the state generated from Python. */
+export type PyWebViewState = Readonly<BridgeState> & {
+  addEventListener(
+    type: 'change',
+    callback: (event: PyWebViewStateEvent) => void,
+  ): void;
+  removeEventListener(
+    type: 'change',
+    callback: (event: PyWebViewStateEvent) => void,
+  ): void;
 };
-
-export type PyWebViewStateEventDetail = {
-  [T in keyof PyWebViewStateProperties]: {
-    key: T;
-    value: PyWebViewStateProperties[T];
-  };
-}[keyof PyWebViewStateProperties];
-
-export type PyWebViewState = EventTarget &
-  PyWebViewStateProperties & {
-    addEventListener(
-      type: 'change',
-      callback: (event: CustomEvent<PyWebViewStateEventDetail>) => void,
-      options?: AddEventListenerOptions | boolean,
-    ): void;
-    addEventListener(
-      type: 'delete',
-      callback: (event: CustomEvent<PyWebViewStateEventDetail>) => void,
-      options?: AddEventListenerOptions | boolean,
-    ): void;
-    removeEventListener(
-      type: 'change',
-      callback: (event: CustomEvent<PyWebViewStateEventDetail>) => void,
-      options?: AddEventListenerOptions | boolean,
-    ): void;
-    removeEventListener(
-      type: 'delete',
-      callback: (event: CustomEvent<PyWebViewStateEventDetail>) => void,
-      options?: AddEventListenerOptions | boolean,
-    ): void;
-  };

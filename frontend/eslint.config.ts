@@ -33,6 +33,7 @@ export default [
       react: {
         version: 'detect',
       },
+      'import/resolver': { typescript: { project: './tsconfig.json' } },
     },
   },
 
@@ -41,7 +42,7 @@ export default [
   ...tseslint.configs.recommended,
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'], // Disables some React recommended rules like `react-in-jsx-scope` not needed in React 17+.
-  reactHooks.configs['recommended-latest'], // TODO: Update to v7+ and change 'recommended-latest' to 'recommended'.
+  reactHooks.configs.flat.recommended,
   jsxA11y.flatConfigs.recommended,
   prettierRecommended,
   importPlugin.flatConfigs.recommended,
@@ -93,6 +94,9 @@ export default [
       // Disallows a local variable to have the same name as a variable in its containing scope.
       'no-shadow': 0,
       '@typescript-eslint/no-shadow': 2,
+      '@typescript-eslint/consistent-type-imports': 2,
+      '@typescript-eslint/no-floating-promises': [2, { ignoreVoid: false }],
+      '@typescript-eslint/no-misused-promises': 2,
 
       // Uses the TypeScript no-use-before-define rule instead of the base one.
       // Disallows the use of variables before they are defined.
@@ -152,6 +156,18 @@ export default [
       // [IMPORT RULES]
       ...importRulesOff,
       'import/newline-after-import': 2,
+      // Keep shared UI independent of workflows, and workflows independent of screen composition.
+      'import/no-restricted-paths': [
+        2,
+        {
+          basePath: import.meta.dirname,
+          zones: [
+            { target: './src/shared', from: './src/features' },
+            { target: './src/shared', from: './src/screens' },
+            { target: './src/features', from: './src/screens' },
+          ],
+        },
+      ],
 
       // [REACT RULES]
       // Enforces arrow functions for Components.
@@ -180,7 +196,7 @@ export default [
         2,
         {
           custom: 'ignore',
-          exceptions: ['button', 'svg'],
+          exceptions: ['button', 'select', 'svg'],
         },
       ],
 
@@ -209,12 +225,8 @@ export default [
           // NOTE: Custom internal path patterns to match aliased imports.
           internalPattern: [
             '@components/.+',
-            '@constants$',
             '@features/.+',
-            '@hooks/.+',
-            '@icons/.+',
             '@screens/.+',
-            '@store/.+',
             '@utils/.+',
             'types/.+',
           ],
@@ -265,6 +277,33 @@ export default [
       'perfectionist/sort-interfaces': [2, perfectionistSortTypes],
       'perfectionist/sort-objects': [2, perfectionistSortObjects],
       'perfectionist/sort-enums': [2, { type: 'natural' }],
+    },
+  },
+
+  // Register icons centrally so every screen uses the same source and typed names.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/shared/components/Icon.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        2,
+        {
+          paths: [
+            {
+              name: '@mdi/js',
+              message:
+                'Register MDI icons in shared Icon using their source slugs.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        2,
+        {
+          selector: 'JSXOpeningElement[name.name="svg"]',
+          message: 'Use the shared Icon registry for interface icons.',
+        },
+      ],
     },
   },
 

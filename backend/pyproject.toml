@@ -1,5 +1,8 @@
 # MyPy
 [tool.mypy]
+mypy_path = ["$MYPY_CONFIG_FILE_DIR", "$MYPY_CONFIG_FILE_DIR/stubs"]
+strict = true
+explicit_package_bases = true
 # NOTE: Disable import-untyped to allow import of untyped modules.
 disable_error_code = ["import-untyped"]
 
@@ -36,8 +39,5 @@ select = [
 preview = true
 explicit-preview-rules = true
 
-# NOTE: Pattern can be negated (!) to apply a rule everywhere except in the specified file(s).
-[tool.ruff.lint.per-file-ignores]
-# NOTE: Allow Union/Optional to support PyFlow-TS type generation.
-"api.py" = ["UP007", "UP045"]
-# "!api.py" = ["ANN"]
+[tool.ruff.lint.isort]
+known-first-party = ["api", "application", "constants", "helpers", "schemas", "service", "utils"]

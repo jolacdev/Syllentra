@@ -2,15 +2,7 @@ from typing import TypedDict
 
 
 class TranscriptionSegment(TypedDict):
-    """
-    Represents a single segment of the transcription.
-
-    Attributes:
-        id (int): The unique identifier for the segment.
-        text (str): The transcribed text for this segment.
-        start (float): The start time of the segment in seconds.
-        end (float): The end time of the segment in seconds.
-    """
+    """Represent one timed text segment independently of the inference library."""
 
     id: int
     text: str

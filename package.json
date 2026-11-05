@@ -1,31 +1,18 @@
 {
-  "name": "whisper-gui",
+  "name": "syllentra",
   "version": "0.0.0",
-  "description": "",
+  "description": "Local speech transcription for your desktop.",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "initialize": "pnpm install && pnpm _initialize-frontend && run-script-os",
-    "initialize:windows": "python -m venv .venv && .\\.venv\\Scripts\\pip install -r requirements.txt",
-    "initialize:macos": "python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt",
-    "_initialize-frontend": "cd frontend && pnpm install",
-    "dev:frontend": "cd frontend && pnpm dev",
-    "dev:backend": "cross-env LIVE_SERVER=1 pnpm _run-backend",
-    "start": "pnpm _build-frontend && pnpm _run-backend",
-    "_run-backend": "run-script-os",
-    "_run-backend:windows": ".\\.venv\\Scripts\\python backend\\main.py",
-    "_run-backend:macos": "./.venv/bin/python backend/main.py",
-    "build": "pnpm _clean:build && pnpm _build-frontend && run-script-os && rimraf build",
-    "build:windows": ".\\.venv\\Scripts\\pyinstaller pyinstaller\\pywebview-react.spec",
-    "build:macos": "./.venv/bin/pyinstaller pyinstaller/pywebview-react.spec",
-    "_build-frontend": "pnpm gen-api && cd frontend && pnpm build",
+    "initialize": "pnpm install && pnpm --dir frontend install && node scripts/python.mjs initialize",
+    "dev:frontend": "pnpm --dir frontend dev",
+    "dev:backend": "cross-env LIVE_SERVER=1 node scripts/python.mjs backend",
+    "start": "pnpm _build-frontend && node scripts/python.mjs backend",
+    "build": "pnpm _clean:build && pnpm _build-frontend && node scripts/python.mjs package",
+    "_build-frontend": "pnpm gen-api && pnpm --dir frontend build",
     "_clean:build": "rimraf dist build frontend_dist",
-    "gen-api": "pnpm _gen-api:code && pnpm _gen-api:types && pnpm _gen-api:move && pnpm _gen-api:clean",
-    "_gen-api:code": "cross-env PYTHONUTF8=1 run-script-os",
-    "_gen-api:code:windows": ".\\.venv\\Scripts\\pyflow generate -m ./backend -o ./temp/pyflow",
-    "_gen-api:code:macos": "./.venv/bin/pyflow generate -m ./backend -o ./temp/pyflow",
-    "_gen-api:types": "tsc ./temp/pyflow/api/api/index.ts --noCheck --declaration --emitDeclarationOnly --target ES2020 --outDir ./temp/pyflow/types",
-    "_gen-api:move": "node ./scripts/move-api-types.mjs",
-    "_gen-api:clean": "rimraf ./temp"
+    "gen-api": "node scripts/python.mjs generate",
+    "check-api": "node scripts/python.mjs check"
   },
   "keywords": [
     "pywebview",
@@ -38,8 +25,7 @@
   "author": "Jose L",
   "devDependencies": {
     "cross-env": "10.1.0",
-    "rimraf": "6.0.1",
-    "run-script-os": "1.1.6",
-    "typescript": "5.9.2"
-  }
+    "rimraf": "6.0.1"
+  },
+  "packageManager": "pnpm@12.3.4"
 }

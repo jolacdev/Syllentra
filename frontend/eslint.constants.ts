@@ -1,5 +1,5 @@
-import { Linter } from 'eslint';
 import importPlugin from 'eslint-plugin-import';
+import type { Linter } from 'eslint';
 
 export const booleanPrefixes = ['is', 'should', 'has', 'can', 'did', 'will'];
 

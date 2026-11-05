@@ -8,5 +8,6 @@ export default {
   semi: true,
   singleQuote: true,
   tabWidth: 2,
+  tailwindFunctions: ['cn'],
   trailingComma: 'all',
 };

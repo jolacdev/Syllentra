@@ -23,12 +23,8 @@
     // NOTE: Type checking & IDE autocomplete.
     "paths": {
       "@components/*": ["./src/shared/components/*"],
-      "@constants": ["./src/shared/constants.ts"],
       "@features/*": ["./src/features/*"],
-      "@hooks/*": ["./src/shared/hooks/*"],
-      "@icons/*": ["./src/shared/icons/*"],
       "@screens/*": ["./src/screens/*"],
-      "@store/*": ["./src/store/*"],
       "@utils/*": ["./src/shared/utils/*"],
       "types/*": ["./src/types/*"]
     }

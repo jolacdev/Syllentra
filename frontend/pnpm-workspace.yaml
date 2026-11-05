@@ -1,4 +1,27 @@
+allowBuilds:
+  # Vite uses esbuild. Its script checks the platform binary and repairs a missing installation.
+  'esbuild@0.25.10': true
+  # The React SWC plugin uses this. Its script checks the native binary and installs a fallback if needed.
+  '@swc/core@1.13.5': true
+
+  # Sass brings this in optionally; this project has no Sass files and does not build it from source.
+  '@parcel/watcher': false
+  # Its script only downloads a missing native binary; Tailwind later removed the script as unnecessary.
+  # https://github.com/tailwindlabs/tailwindcss/pull/19149
+  '@tailwindcss/oxide': false
+  # No msw.workerDirectory is configured, so its worker-update script has nothing to do.
+  msw: false
+  # ESLint's resolver includes optional platform binaries; skip its fallback downloader.
+  # https://github.com/unrs/unrs-resolver/blob/main/postinstall.js
+  'unrs-resolver@1.12.2': false
+
+# minimumReleaseAge — default: 0 (minutes)
 minimumReleaseAge: 20160 # 2 Weeks
 # minimumReleaseAge: 43800 # 1 Month
 # minimumReleaseAge: 10080 # 1 Week
 # minimumReleaseAge: 1440 # 1 Day
+
+# Exclude core packages to address server components vulnerabilities
+minimumReleaseAgeExclude:
+  - react
+  - react-dom

@@ -15,6 +15,7 @@ export type FileSizeUnit = keyof typeof SIZE_UNITS;
 
 const DEFAULT_DECIMALS = 2;
 
+/** Format byte sizes consistently in file previews. */
 export const formatSizeUnit = (
   value: number,
   from: FileSizeUnit = 'Bytes',

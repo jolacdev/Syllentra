@@ -2,7 +2,8 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
-import { defineConfig, InlineConfig, UserConfig } from 'vite';
+import { defineConfig } from 'vite';
+import type { InlineConfig, UserConfig } from 'vite';
 
 // Extends Vite’s UserConfig type to include Vitest-specific options (`test` field).
 interface VitestConfigExport extends UserConfig {
@@ -21,12 +22,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@components': path.resolve(__dirname, './src/shared/components'),
-      '@constants': path.resolve(__dirname, './src/shared/constants.ts'),
       '@features': path.resolve(__dirname, './src/features'),
-      '@hooks': path.resolve(__dirname, './src/shared/hooks'),
-      '@icons': path.resolve(__dirname, './src/shared/icons'),
       '@screens': path.resolve(__dirname, './src/screens'),
-      '@store': path.resolve(__dirname, './src/store'),
       '@utils': path.resolve(__dirname, './src/shared/utils'),
       types: path.resolve(__dirname, './src/types'),
     },
