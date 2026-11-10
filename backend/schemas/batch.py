@@ -43,6 +43,31 @@ class OutputArtifact(TypedDict):
     error: str | None
 
 
+class AudioTrack(TypedDict):
+    """Describe a container audio stream independently of its position among other stream types."""
+
+    index: int
+    number: int
+    language: str | None
+    rawLanguage: str | None
+    title: str
+    codec: str
+    channels: int
+    isDefault: bool
+    isCommentary: bool
+    isAudioDescription: bool
+
+
+class AudioSelection(TypedDict):
+    """Expose the automatic choice and an optional file-specific override without decoding audio."""
+
+    tracks: list[AudioTrack]
+    selectedIndex: int | None
+    overrideIndex: int | None
+    reason: Literal["single", "preferred", "default", "fallback", "override", "unavailable"]
+    probeError: str | None
+
+
 class MediaItem(TypedDict):
     """Describe one canonical source, inclusion choice, and processing outcome."""
 
@@ -62,6 +87,7 @@ class MediaItem(TypedDict):
     resultId: str | None
     noSpeech: bool
     outputs: list[OutputArtifact]
+    audio: AudioSelection
 
 
 class Workspace(TypedDict):
@@ -83,6 +109,7 @@ class ExportSettings(TypedDict):
 
     formats: list[ExportFormat]
     destination: str | None
+    includeAudioLanguage: bool
 
 
 class ItemPlan(TypedDict):
@@ -94,6 +121,8 @@ class ItemPlan(TypedDict):
     modifiedNs: str
     resultId: str | None
     outputs: list[OutputArtifact]
+    audioStreamIndex: int | None
+    subtitleLanguage: str | None
 
 
 class BatchPlan(TypedDict):
@@ -137,11 +166,12 @@ class TranscriptPage(TypedDict):
 
 
 class InterfacePreferences(TypedDict):
-    """Persist only versioned interface preferences while preserving the legacy data identity."""
+    """Persist interface and optional multi-track language preferences under the existing data identity."""
 
     version: Literal[2]
     theme: Literal["system", "light", "dark"]
     interfaceLanguage: Literal["system", "en", "es-ES"]
+    preferredAudioLanguage: str | None
 
 
 class ScanState(TypedDict):

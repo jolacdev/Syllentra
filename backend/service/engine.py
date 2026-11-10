@@ -29,7 +29,9 @@ class TranscriptionEngine(Protocol):
         """Prepare the engine only after an explicit setup command."""
         ...
 
-    def transcribe(self, source: Path, cancel: Event, report: PhaseCallback) -> InferenceOutput:
+    def transcribe(
+        self, source: Path, cancel: Event, report: PhaseCallback, *, audio_stream_index: int | None = None
+    ) -> InferenceOutput:
         """Return normalized speech while reporting only measurable phases and progress."""
         ...
 

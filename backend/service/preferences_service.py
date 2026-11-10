@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from schemas.batch import InterfacePreferences
+from utils.language_utils import normalize_language
 
 PREFERENCES_VERSION = 2
 
@@ -20,7 +21,12 @@ class PreferencesService:
 
     def read(self) -> tuple[InterfacePreferences, str | None]:
         """Recover valid interface choices from old or new JSON without accepting unchecked values."""
-        preferences: InterfacePreferences = {"version": 2, "theme": "system", "interfaceLanguage": "system"}
+        preferences: InterfacePreferences = {
+            "version": 2,
+            "theme": "system",
+            "interfaceLanguage": "system",
+            "preferredAudioLanguage": None,
+        }
         if not self.path.exists():
             return preferences, None
         try:
@@ -29,6 +35,9 @@ class PreferencesService:
                 raise ValueError("Invalid preferences")
             theme: object = value.get("theme")
             language: object = value.get("interfaceLanguage")
+            audio_language: object = value.get("preferredAudioLanguage")
+            if isinstance(audio_language, str):
+                preferences["preferredAudioLanguage"] = normalize_language(audio_language)
             if theme == "dark":
                 preferences["theme"] = "dark"
             elif theme == "light":

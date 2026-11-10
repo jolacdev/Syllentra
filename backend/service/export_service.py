@@ -10,6 +10,7 @@ from uuid import uuid4
 from schemas.batch import (
     BatchPlan,
     ConflictAction,
+    ExportFormat,
     ExportSettings,
     InferenceOutput,
     OutputArtifact,
@@ -39,6 +40,12 @@ def _check_parent(path: Path) -> None:
         parent = parent.parent
     if not parent.is_dir() or parent.is_symlink() or not os.access(parent, os.W_OK | os.X_OK):
         raise ValueError(f"The output folder is unavailable or not writable: {parent}")
+
+
+def _output_name(stem: str, format: ExportFormat, subtitle_language: str | None) -> str:
+    """Keep the language immediately before the subtitle extension, even on renamed copies."""
+    language_suffix = f".{subtitle_language}" if subtitle_language and format != "txt" else ""
+    return f"{stem}{language_suffix}.{format}"
 
 
 class ExportService:
@@ -76,14 +83,27 @@ class ExportService:
                 parent = Path(destination).resolve()
                 if root["isFolder"]:
                     parent = parent / root["alias"] / Path(item["relativePath"]).parent
+            stream_index = item["audio"]["selectedIndex"]
+            subtitle_language = None
+            if settings.get("includeAudioLanguage", False):
+                subtitle_language = next(
+                    (
+                        track["language"]
+                        for track in item["audio"]["tracks"]
+                        if track["index"] == stream_index
+                    ),
+                    None,
+                )
             stem = source.stem
             suffix = 2
-            while any(_key(parent / f"{stem}.{format}") in reserved for format in formats):
+            while any(
+                _key(parent / _output_name(stem, format, subtitle_language)) in reserved for format in formats
+            ):
                 stem = f"{source.stem} ({suffix})"
                 suffix += 1
             artifacts: list[OutputArtifact] = []
             for format in formats:
-                target = parent / f"{stem}.{format}"
+                target = parent / _output_name(stem, format, subtitle_language)
                 _check_parent(target)
                 signature = _signature(target)
                 already_written = (
@@ -115,6 +135,8 @@ class ExportService:
                     "modifiedNs": item["modifiedNs"],
                     "resultId": reusable,
                     "outputs": artifacts,
+                    "audioStreamIndex": stream_index,
+                    "subtitleLanguage": subtitle_language,
                 }
             )
         if not plan["items"]:
@@ -136,18 +158,21 @@ class ExportService:
             if not affected:
                 continue
             if action == "rename":
-                first = Path(item["outputs"][0]["path"])
+                first = item["outputs"][0]
+                path = Path(first["path"])
+                language = item["subtitleLanguage"]
+                base = path.name.removesuffix(_output_name("", first["format"], language))
                 suffix = 2
-                stem = f"{first.stem} ({suffix})"
-                while any(
-                    _signature(first.with_name(f"{stem}.{output['format']}")) is not None
-                    or _key(first.with_name(f"{stem}.{output['format']}")) in reserved
-                    for output in item["outputs"]
-                ):
+                while True:
+                    stem = f"{base} ({suffix})"
+                    targets = [
+                        path.with_name(_output_name(stem, output["format"], language))
+                        for output in item["outputs"]
+                    ]
+                    if all(_key(target) not in reserved and _signature(target) is None for target in targets):
+                        break
                     suffix += 1
-                    stem = f"{first.stem} ({suffix})"
-                for output in item["outputs"]:
-                    target = first.with_name(f"{stem}.{output['format']}")
+                for output, target in zip(item["outputs"], targets, strict=True):
                     output.update(
                         {
                             "path": str(target),

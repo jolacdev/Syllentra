@@ -5,6 +5,8 @@ import Checkbox from '@components/Checkbox';
 import Icon from '@components/Icon';
 import type { ExportSettings, MediaItem } from 'types/pywebview/pywebview-api';
 
+import { getSubtitleLanguage, outputName } from './exportNames';
+
 type ExportSettingsPanelProps = {
   item: MediaItem | null;
   settings: ExportSettings;
@@ -24,7 +26,11 @@ const ExportSettingsPanel = ({
   isDisabled,
 }: ExportSettingsPanelProps) => {
   const { t } = useTranslation();
-  const example = `${item?.name.replace(/\.[^.]+$/, '') ?? t('batch.recordingExample')}.${settings.formats[0] ?? 'srt'}`;
+  const example = outputName(
+    item?.name.replace(/\.[^.]+$/, '') ?? t('batch.recordingExample'),
+    settings.formats[0] ?? 'srt',
+    getSubtitleLanguage(item, settings),
+  );
   return (
     <div className="px-5 pt-1 pb-5">
       <fieldset className="mt-0" disabled={isDisabled}>
@@ -54,6 +60,22 @@ const ExportSettingsPanel = ({
           {t('batch.selectFormat')}
         </p>
       )}
+      <div className="mt-2">
+        <Checkbox
+          checked={settings.includeAudioLanguage}
+          disabled={
+            isDisabled || !settings.formats.some((format) => format !== 'txt')
+          }
+          onChange={(includeAudioLanguage) =>
+            onSettings({ ...settings, includeAudioLanguage })
+          }
+        >
+          {t('batch.includeAudioLanguage')}
+        </Checkbox>
+        <p className="text-ink/65 ml-6 text-xs leading-5">
+          {t('batch.includeAudioLanguageHint')}
+        </p>
+      </div>
       <fieldset className="mt-4 space-y-3" disabled={isDisabled}>
         <legend className="text-ink/65 mb-2 text-xs">
           {t('batch.destination')}

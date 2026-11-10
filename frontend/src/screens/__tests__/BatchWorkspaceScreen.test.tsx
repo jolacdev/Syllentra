@@ -27,6 +27,20 @@ const setup = async (scenario = 'ready') => {
   await screen.findByRole('heading', { name: 'Batch transcription' });
 };
 
+/** Change the persistent audio preference through general Settings and return to the workspace. */
+const setAudioPreference = async (language: string) => {
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Settings' });
+  const preference = within(dialog).getByLabelText('Preferred audio language');
+  fireEvent.change(preference, { target: { value: language } });
+  await waitFor(() => expect(preference).toHaveValue(language));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+};
+
+/** Scope file and explanation queries to a named audio group. */
+const withinAudioGroup = (name: string) =>
+  within(screen.getByRole('region', { name }));
+
 beforeEach(async () => {
   await i18n.changeLanguage('en');
   Object.defineProperty(navigator, 'clipboard', {
@@ -49,6 +63,228 @@ afterEach(async () => {
 });
 
 describe('batch workspace', () => {
+  it('connects the audio accordion to its persistent setting and keeps the chosen language visible when collapsed', async () => {
+    /** Explain the active rule, focus its setting directly, and reflect changes without losing disclosure state. */
+    await setup();
+    const toggle = screen.getByRole('button', {
+      name: 'Audio track selection File default',
+    });
+    const explanation = screen.getByText(
+      'No language preference is set. Files with multiple audio tracks use their default or first track.',
+    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(explanation).toBeVisible();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(explanation).not.toBeVisible();
+    fireEvent.click(toggle);
+    const change = screen.getByRole('button', {
+      name: 'Change audio preference in Settings',
+    });
+    change.focus();
+    fireEvent.click(change);
+    const dialog = await screen.findByRole('dialog', { name: 'Settings' });
+    const preference = within(dialog).getByLabelText(
+      'Preferred audio language',
+    );
+    expect(preference).toHaveFocus();
+    fireEvent.change(preference, { target: { value: 'en' } });
+    await waitFor(() => expect(preference).toHaveValue('en'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(change).toHaveFocus();
+    expect(toggle).toHaveAccessibleName('Audio track selection English');
+    expect(
+      screen.getByText(
+        'Prefer English in files with multiple audio tracks. Files with one track use that track.',
+      ),
+    ).toBeVisible();
+    fireEvent.click(toggle);
+    await setAudioPreference('fr');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAccessibleName('Audio track selection French');
+    await act(() => i18n.changeLanguage('es-ES'));
+    expect(toggle).toHaveAccessibleName('Selección de pistas de audio Francés');
+    fireEvent.click(toggle);
+    expect(
+      screen.getByRole('button', {
+        name: 'Cambiar la preferencia de audio en Ajustes',
+      }),
+    ).toBeVisible();
+  });
+
+  it('applies the optional preference only to multi-track files and starts without selection prompts', async () => {
+    /** Mixed single-track and multi-track recordings must keep automatic fallback without blocking admission. */
+    await setup();
+    expect(
+      screen.queryByLabelText('Preferred audio language'),
+    ).not.toBeInTheDocument();
+    const choose = vi.spyOn(window.pywebview.api, 'set_audio_language');
+    const start = vi.spyOn(window.pywebview.api, 'start_batch');
+    await setAudioPreference('en');
+    await screen.findByRole('button', { name: 'Default or first track 1' });
+    expect(choose).toHaveBeenCalledWith('en');
+    expect(
+      screen.getByRole('button', { name: 'Single audio track 3' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.getByRole('button', { name: 'English matches 1' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.getByRole('button', { name: 'Default or first track 1' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.getByRole('button', { name: 'Manual selection 0' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe 5 files' }));
+    await waitFor(() => expect(start).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByLabelText('Preferred audio language')).toBeDisabled();
+  });
+
+  it('preserves disclosure choices and the inspected file when track changes move it between groups', async () => {
+    /** Moving files updates counts without opening closed groups, closing empty ones, or stealing focus. */
+    await setup();
+    await setAudioPreference('en');
+    const include = vi.spyOn(window.pywebview.api, 'set_inclusion');
+    const choose = vi.spyOn(window.pywebview.api, 'select_audio_track');
+    const defaults = screen.getByRole('button', {
+      name: 'Default or first track 1',
+    });
+    expect(defaults).toHaveAttribute('aria-expanded', 'false');
+    const preferred = screen.getByRole('button', { name: 'English matches 1' });
+    fireEvent.click(preferred);
+    fireEvent.click(
+      withinAudioGroup('English matches').getByRole('button', {
+        name: /Camera audio/,
+      }),
+    );
+    const picker = await screen.findByLabelText('Audio track');
+    expect(picker).toHaveValue('');
+    expect(
+      screen.getByText(/Track 2 · English · English dialogue/, {
+        selector: 'p',
+      }),
+    ).toBeInTheDocument();
+    picker.focus();
+    fireEvent.change(picker, { target: { value: '2' } });
+    const manual = await screen.findByRole('button', {
+      name: 'Manual selection 1',
+    });
+    expect(choose).toHaveBeenCalledWith('file-1', 2);
+    expect(manual).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.getByRole('button', { name: 'English matches 0' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      withinAudioGroup('English matches').getByText('No files in this group.'),
+    ).toBeVisible();
+    expect(picker).toHaveFocus();
+    expect(picker).toHaveValue('2');
+    expect(
+      screen.getByRole('heading', { name: 'Camera audio.mp4' }),
+    ).toBeInTheDocument();
+    fireEvent.click(manual);
+    expect(
+      withinAudioGroup('Manual selection').getByRole('button', {
+        name: /Camera audio/,
+      }),
+    ).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(preferred);
+    picker.focus();
+    fireEvent.change(picker, { target: { value: '' } });
+    await screen.findByRole('button', { name: 'Manual selection 0' });
+    expect(choose).toHaveBeenLastCalledWith('file-1', null);
+    expect(preferred).toHaveAccessibleName('English matches 1');
+    expect(preferred).toHaveAttribute('aria-expanded', 'false');
+    expect(manual).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      withinAudioGroup('Manual selection').getByText('No files in this group.'),
+    ).toBeVisible();
+    expect(picker).toHaveFocus();
+    fireEvent.change(picker, { target: { value: '2' } });
+    await screen.findByRole('button', { name: 'Manual selection 1' });
+    expect(manual).toHaveAttribute('aria-expanded', 'true');
+    await setAudioPreference('fr');
+    expect(picker).toHaveValue('2');
+    expect(screen.getByText('Selected manually for this file.')).toBeVisible();
+    picker.focus();
+    fireEvent.change(picker, { target: { value: '' } });
+    await screen.findByRole('button', { name: 'Manual selection 0' });
+    expect(
+      screen.getByText(
+        'Preferred language unavailable or unknown; using the default or first audio track.',
+      ),
+    ).toBeVisible();
+    expect(defaults).toHaveAttribute('aria-expanded', 'false');
+    expect(picker).toHaveFocus();
+    fireEvent.click(defaults);
+    expect(
+      withinAudioGroup('Default or first track').getByRole('button', {
+        name: /Camera audio/,
+      }),
+    ).toHaveAttribute('aria-current', 'true');
+    expect(include).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Transcribe 5 files' }),
+    ).toBeEnabled();
+  });
+
+  it('explains every group and merges default choices and fallbacks into one count', async () => {
+    /** File lists replace duplicate counters, keep empty categories, and stay independent of inclusion. */
+    await setup();
+    expect(
+      screen.getByRole('button', { name: 'Default or first track 2' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Default or first track 2' }),
+    );
+    const defaults = withinAudioGroup('Default or first track');
+    expect(defaults.getAllByRole('button')).toHaveLength(2);
+    expect(
+      defaults.getByText(
+        'No language preference is set. These files use their marked default audio track, or their first audio track if none is marked.',
+      ),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Single audio track 3' }),
+    );
+    expect(
+      withinAudioGroup('Single audio track').getAllByRole('button'),
+    ).toHaveLength(3);
+    await setAudioPreference('en');
+    expect(
+      screen.getByRole('button', { name: 'Default or first track 1' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/File default: 0/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Manual selection 0' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps all four categories and their explanations available in an empty batch', async () => {
+    /** Zero counts retain a stable layout, including a meaningful preferred-language label when none is set. */
+    await setup('empty');
+    for (const title of [
+      'Single audio track',
+      'Preferred language',
+      'Default or first track',
+      'Manual selection',
+    ]) {
+      const toggle = screen.getByRole('button', { name: `${title} 0` });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+      const group = withinAudioGroup(title);
+      expect(group.getByText('No files in this group.')).toBeVisible();
+      expect(group.queryByRole('list')).not.toBeInTheDocument();
+    }
+    expect(
+      screen.getByText(
+        'Set a preferred audio language in Settings. Files with a matching track will appear here.',
+      ),
+    ).toBeVisible();
+  });
+
   it('starts empty with SRT and beside-source defaults', async () => {
     /** Verify a fresh batch does not inherit an unexpected format or destination. */
     await setup('empty');
@@ -59,7 +295,7 @@ describe('batch workspace', () => {
       screen.getByRole('radio', { name: 'Beside source files' }),
     ).toBeChecked();
     expect(
-      screen.getByRole('button', { name: 'Start 0 files' }),
+      screen.getByRole('button', { name: 'Transcribe 0 files' }),
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Add folder' })).toBeEnabled();
   });
@@ -75,14 +311,21 @@ describe('batch workspace', () => {
       'title',
       expect.stringContaining('reset export choices'),
     );
+    const includeLanguage = screen.getByRole('checkbox', {
+      name: 'Include audio language in subtitle filenames',
+    });
+    expect(includeLanguage).not.toBeChecked();
+    fireEvent.click(includeLanguage);
+    await waitFor(() => expect(includeLanguage).toBeChecked());
     fireEvent.click(screen.getByRole('checkbox', { name: 'TXT' }));
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'TXT' })).toBeChecked(),
     );
     fireEvent.click(reset);
-    await screen.findByRole('button', { name: 'Start 0 files' });
+    await screen.findByRole('button', { name: 'Transcribe 0 files' });
     expect(screen.getByRole('checkbox', { name: 'SRT' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'TXT' })).not.toBeChecked();
+    expect(includeLanguage).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'New batch' })).toBeDisabled();
   });
 
@@ -101,7 +344,9 @@ describe('batch workspace', () => {
     expect(
       screen.getByRole('treeitem', { name: /Research interviews/ }),
     ).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('button', { name: 'Start 6 files' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Transcribe 6 files' }),
+    ).toBeEnabled();
     fireEvent.click(screen.getByRole('checkbox', { name: /WAV/ }));
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: /WAV/ })).not.toBeChecked(),
@@ -118,11 +363,11 @@ describe('batch workspace', () => {
     const folder = screen.getByRole('treeitem', { name: /Episode 01/ });
     fireEvent.keyDown(folder, { key: 'ArrowRight' });
     const recording = screen.getByRole('treeitem', {
-      name: /Interview with Elena/,
+      name: /Interview with Jane/,
     });
     fireEvent.keyDown(recording, { key: 'Enter' });
     expect(
-      screen.getByRole('heading', { name: 'Interview with Elena.mp3' }),
+      screen.getByRole('heading', { name: 'Interview with Jane.mp3' }),
     ).toBeInTheDocument();
     expect(recording).toHaveAttribute('aria-selected', 'true');
     expect(inclusion).not.toHaveBeenCalled();
@@ -133,7 +378,7 @@ describe('batch workspace', () => {
     fireEvent.keyDown(recording, { key: ' ' });
     await waitFor(() =>
       expect(
-        screen.getByRole('treeitem', { name: /Interview with Elena/ }),
+        screen.getByRole('treeitem', { name: /Interview with Jane/ }),
       ).toHaveAttribute('aria-checked', 'false'),
     );
     expect(
@@ -147,7 +392,7 @@ describe('batch workspace', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'SRT' }));
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Start 5 files' }),
+        screen.getByRole('button', { name: 'Transcribe 5 files' }),
       ).toBeDisabled(),
     );
     expect(screen.getByText('Select at least one format.')).toBeInTheDocument();
@@ -173,21 +418,26 @@ describe('batch workspace', () => {
     await setup('conflicts');
     const start = vi.spyOn(window.pywebview.api, 'start_batch');
     const resolve = vi.spyOn(window.pywebview.api, 'resolve_conflicts');
-    fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+    const includeLanguage = screen.getByRole('checkbox', {
+      name: 'Include audio language in subtitle filenames',
+    });
+    fireEvent.click(includeLanguage);
+    await waitFor(() => expect(includeLanguage).toBeChecked());
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe 5 files' }));
     const dialog = await screen.findByRole('dialog', {
       name: '1 output already exists',
     });
     expect(start).not.toHaveBeenCalled();
     expect(
       within(dialog).getByText(
-        /Research interviews\/Episode 01\/Interview with Elena.srt/,
+        '/Preview/Research interviews/Episode 01/Interview with Jane.es.srt',
       ),
     ).toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('Apply to all conflicts'), {
       target: { value: 'rename' },
     });
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Start batch' }),
+      within(dialog).getByRole('button', { name: 'Transcribe batch' }),
     );
     await waitFor(() => expect(start).toHaveBeenCalledOnce());
     expect(resolve).toHaveBeenCalledWith(
@@ -205,7 +455,9 @@ describe('batch workspace', () => {
     await setup();
     vi.useFakeTimers();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Transcribe 5 files' }),
+      );
       await vi.advanceTimersByTimeAsync(350);
     });
     expect(
@@ -229,7 +481,9 @@ describe('batch workspace', () => {
     await setup();
     vi.useFakeTimers();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Transcribe 5 files' }),
+      );
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(screen.getByText('Batch finished')).toBeInTheDocument();
@@ -264,12 +518,41 @@ describe('batch workspace', () => {
     );
   });
 
+  it('retains completed results only while the effective audio track stays the same', async () => {
+    /** Changing selection mode preserves speech, but another stream must clear the transcript and outputs. */
+    await setup();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Transcribe 5 files' }),
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      fireEvent.click(screen.getByRole('treeitem', { name: /Opening notes/ }));
+    });
+    const picker = screen.getByLabelText('Audio track');
+    await act(async () => fireEvent.change(picker, { target: { value: '0' } }));
+    expect(screen.getByText('This is a simulated transcript.')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Open SRT output' }),
+    ).toBeEnabled();
+    await act(async () => fireEvent.change(picker, { target: { value: '1' } }));
+    expect(
+      screen.queryByText('This is a simulated transcript.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open SRT output' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy text' })).toBeDisabled();
+  });
+
   it('expands the transcript into a wide dialog and returns to the batch', async () => {
     /** A completed preview must be readable in a wider space without leaving the queue. */
     await setup();
     vi.useFakeTimers();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Transcribe 5 files' }),
+      );
       await vi.advanceTimersByTimeAsync(10_000);
     });
     await act(async () =>
@@ -305,7 +588,7 @@ describe('batch workspace', () => {
       expect(screen.getByRole('checkbox', { name: 'VTT' })).toBeChecked(),
     );
     const resolve = vi.spyOn(window.pywebview.api, 'resolve_conflicts');
-    fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe 5 files' }));
     const dialog = await screen.findByRole('dialog', {
       name: '3 outputs already exist',
     });
@@ -313,7 +596,7 @@ describe('batch workspace', () => {
     expect(within(dialog).getAllByRole('combobox')).toHaveLength(2);
     fireEvent.change(choice, { target: { value: 'rename' } });
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Start batch' }),
+      within(dialog).getByRole('button', { name: 'Transcribe batch' }),
     );
     await waitFor(() => expect(resolve).toHaveBeenCalled());
     expect(resolve.mock.calls[0][1]).toHaveLength(3);
@@ -323,7 +606,7 @@ describe('batch workspace', () => {
     /** Stop must settle the queue while preserving its rows and cancellation outcomes. */
     await setup();
     const stop = vi.spyOn(window.pywebview.api, 'stop_batch');
-    fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe 5 files' }));
     await screen.findByRole('button', { name: 'Stop batch' });
     fireEvent.click(screen.getByRole('button', { name: 'Stop batch' }));
     await screen.findByText('Batch stopped');
@@ -348,7 +631,7 @@ describe('batch workspace', () => {
           finishQuit = () => resolve({ error: null });
         }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Start 5 files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe 5 files' }));
     await screen.findByRole('button', { name: 'Stop batch' });
     await act(async () => {
       window.pywebview.state.app.closeRequested = true;
@@ -393,8 +676,10 @@ describe('batch workspace', () => {
     fireEvent.click(
       within(dialog).getByText('Supported spoken languages (25)'),
     );
-    expect(within(dialog).getByText('Greek')).toBeVisible();
-    expect(within(dialog).getByText('Maltese')).toBeVisible();
+    expect(within(dialog).getByText('Greek', { selector: 'li' })).toBeVisible();
+    expect(
+      within(dialog).getByText('Maltese', { selector: 'li' }),
+    ).toBeVisible();
     expect(within(dialog).getByText(/Japanese is not supported/)).toBeVisible();
     expect(
       within(dialog).getByText(/The list comes from the active engine/),
@@ -416,7 +701,7 @@ describe('batch workspace', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ajustes' })).toHaveFocus();
     expect(
-      screen.getByRole('button', { name: 'Iniciar 5 archivos' }),
+      screen.getByRole('button', { name: 'Transcribir 5 archivos' }),
     ).toBeEnabled();
   });
 
@@ -506,6 +791,8 @@ describe('workspace recovery', () => {
     expect(
       await screen.findByRole('heading', { name: 'Batch transcription' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start 5 files' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Transcribe 5 files' }),
+    ).toBeEnabled();
   });
 });

@@ -257,6 +257,14 @@ class PyWebViewApi:
         """Persist interface language and appearance independently of spoken language."""
         return self._command(partial(self._service.set_appearance, theme, language))
 
+    def set_audio_language(self, language: str | None) -> CommandReply:
+        """Remember an optional preferred language used only for recordings with multiple audio tracks."""
+        return self._command(partial(self._service.set_audio_language, language))
+
+    def select_audio_track(self, item_id: str, stream_index: int | None) -> CommandReply:
+        """Override a recording's selected audio stream or restore automatic selection with null."""
+        return self._command(partial(self._service.select_audio_track, item_id, stream_index))
+
     def new_batch(self, discard_unexported: bool = False) -> CommandReply:
         """Start a clean session selection with explicit protection for unsaved results."""
         return self._command(partial(self._service.new_batch, discard_unexported))

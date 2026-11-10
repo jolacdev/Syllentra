@@ -68,9 +68,9 @@ def _write_frame(handle: BinaryIO, frame: AudioFrame, samples: int, origin: floa
 
 @contextmanager
 def prepare_audio(
-    source: Path, directory: Path, cancel: Event, report: AudioProgress
+    source: Path, directory: Path, cancel: Event, report: AudioProgress, stream_index: int | None = None
 ) -> Iterator[PreparedAudio]:
-    """Stream a container's default audio to a temporary float32 file and always remove it."""
+    """Decode the admitted stream, or the container default, while preserving its original timeline."""
     directory.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=directory, suffix=".f32", delete=False) as handle:
         temporary = Path(handle.name)
@@ -79,9 +79,17 @@ def prepare_audio(
             streams = list(container.streams.audio)
             if not streams:
                 raise ValueError("This recording has no audio stream.")
-            stream = next(
-                (item for item in streams if item.disposition & av.stream.Disposition.default), streams[0]
-            )
+            if stream_index is None:
+                stream = next(
+                    (item for item in streams if item.disposition & av.stream.Disposition.default), streams[0]
+                )
+            else:
+                selected = next((item for item in streams if item.index == stream_index), None)
+                if selected is None:
+                    raise ValueError(
+                        "The selected audio track is no longer available. Add the recording again."
+                    )
+                stream = selected
             resampler = AudioResampler(format="flt", layout="mono", rate=SAMPLE_RATE)
             origin = container.start_time / av.time_base if container.start_time is not None else 0.0
             duration = container.duration / av.time_base if container.duration else None

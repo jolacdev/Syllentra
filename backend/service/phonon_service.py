@@ -14,6 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event, RLock
 from time import monotonic
+from typing import Literal, TypedDict
 from uuid import uuid4
 
 import fermion
@@ -48,6 +49,15 @@ PhaseCallback = Callable[[str, float | None], None]
 WorkerTarget = Callable[[WorkerConnection, str], None]
 
 
+class WorkerRequest(TypedDict):
+    """Keep the admitted source and stream together in the JSON worker protocol."""
+
+    mode: Literal["setup", "transcribe"]
+    source: str
+    directory: str
+    audioStreamIndex: int | None
+
+
 def _send(
     connection: WorkerConnection, request_id: str, kind: str, phase: str = "", progress: float | None = None
 ) -> None:
@@ -58,10 +68,15 @@ def _send(
 
 
 def _run_audio(
-    connection: WorkerConnection, request_id: str, speech: fermion.SpeechModel, source: Path, directory: Path
+    connection: WorkerConnection,
+    request_id: str,
+    speech: fermion.SpeechModel,
+    request: WorkerRequest,
 ) -> None:
     """Decode one recording and save normalized output inside its parent-owned session directory."""
     last_report = 0.0
+    source = Path(request["source"])
+    directory = Path(request["directory"])
 
     def report(progress: float | None) -> None:
         """Coalesce decoder progress without parsing vendor log messages."""
@@ -71,7 +86,7 @@ def _run_audio(
             last_report = now
             _send(connection, request_id, "phase", "preparing", progress)
 
-    with prepare_audio(source, directory, Event(), report) as prepared:
+    with prepare_audio(source, directory, Event(), report, request["audioStreamIndex"]) as prepared:
         audio = np.memmap(prepared.path, dtype=np.float32, mode="r", shape=(prepared.samples,))
         try:
             output = transcribe_audio(
@@ -164,9 +179,16 @@ def run_worker(connection: WorkerConnection, cache: str) -> None:
                 if mode == "setup":
                     _send(connection, request_id, "complete")
                 else:
-                    source = Path(require_string(value.get("source")))
-                    directory = Path(require_string(value.get("directory")))
-                    _run_audio(connection, request_id, speech, source, directory)
+                    stream_index = value.get("audioStreamIndex")
+                    if stream_index is not None and (type(stream_index) is not int or stream_index < 0):
+                        raise ValueError("Invalid audio stream index")
+                    request: WorkerRequest = {
+                        "mode": "transcribe",
+                        "source": require_string(value.get("source")),
+                        "directory": require_string(value.get("directory")),
+                        "audioStreamIndex": stream_index,
+                    }
+                    _run_audio(connection, request_id, speech, request)
             except (Exception, SystemExit) as error:
                 connection.send_bytes(
                     json.dumps({"id": request_id, "kind": "error", "error": str(error)}).encode()
@@ -278,7 +300,12 @@ class PhononEngine:
         self._process = None
         self._connection = None
 
-    def _execute(self, mode: str, source: str, directory: str, cancel: Event, report: PhaseCallback) -> None:
+    def _execute(
+        self,
+        request: WorkerRequest,
+        cancel: Event,
+        report: PhaseCallback,
+    ) -> None:
         """Wait for one identified request while allowing bounded cancellation and crash detection."""
         with self._lock:
             if cancel.is_set():
@@ -288,11 +315,9 @@ class PhononEngine:
             connection.send_bytes(
                 json.dumps(
                     {
+                        **request,
                         "id": request_id,
-                        "mode": mode,
                         "model": str(self.model_path),
-                        "source": source,
-                        "directory": directory,
                     }
                 ).encode()
             )
@@ -349,7 +374,11 @@ class PhononEngine:
                 if self.model_path.exists() and not self.is_ready():
                     self.model_path.rename(previous)
                 try:
-                    self._execute("setup", "", "", cancel, report)
+                    self._execute(
+                        {"mode": "setup", "source": "", "directory": "", "audioStreamIndex": None},
+                        cancel,
+                        report,
+                    )
                     if not self.is_ready():
                         raise RuntimeError(
                             "Model setup finished without valid local assets. Retry preparation."
@@ -362,12 +391,23 @@ class PhononEngine:
                         previous.rename(self.model_path)
                     raise
 
-    def transcribe(self, source: Path, cancel: Event, report: PhaseCallback) -> InferenceOutput:
+    def transcribe(
+        self, source: Path, cancel: Event, report: PhaseCallback, *, audio_stream_index: int | None = None
+    ) -> InferenceOutput:
         """Transcribe a local container while preserving worker reuse and cleaning session audio."""
         if not self.is_ready():
             raise ValueError("Prepare Phonon-2.5 before transcribing recordings.")
         with TemporaryDirectory(prefix="syllentra-audio-") as directory:
-            self._execute("transcribe", str(source), directory, cancel, report)
+            self._execute(
+                {
+                    "mode": "transcribe",
+                    "source": str(source),
+                    "directory": directory,
+                    "audioStreamIndex": audio_stream_index,
+                },
+                cancel,
+                report,
+            )
             value: object = json.loads((Path(directory) / "result.json").read_text(encoding="utf-8"))
             return parse_output(value)
 

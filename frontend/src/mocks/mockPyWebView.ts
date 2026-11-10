@@ -1,13 +1,26 @@
+import {
+  getSubtitleLanguage,
+  outputName,
+} from '@features/transcription/exportNames';
 import type {
+  AudioSelection,
   BatchAppState,
   BatchPlan,
   CommandReply,
+  ExportSettings,
   MediaItem,
   PyWebViewApi,
   TranscriptPage,
   WorkspaceDelta,
 } from 'types/pywebview/pywebview-api';
 import type { PyWebViewStateEvent } from 'types/pywebview/pywebview-state';
+
+/** Start the simulated batch with the same export defaults as the native app. */
+const defaultExports = (): ExportSettings => ({
+  destination: null,
+  formats: ['srt'],
+  includeAudioLanguage: false,
+});
 
 /** Create deterministic nested media without implying access to native files in browser development. */
 const previewFiles = (isLarge: boolean): MediaItem[] => {
@@ -18,14 +31,14 @@ const previewFiles = (isLarge: boolean): MediaItem[] => {
           `Session ${Math.floor(index / 100) + 1}/Recording ${index + 1}.wav`,
       )
     : [
-        'Episode 01/Interview with Elena.mp3',
+        'Episode 01/Interview with Jane.mp3',
         'Episode 01/Camera audio.mp4',
         'Episode 02/Field recording.wav',
-        'Episode 02/Interview with Marco.mp3',
+        'Episode 02/Interview with John.mp3',
         'Episode 02/Room tone.wav',
         'Opening notes.m4a',
       ];
-  return paths.map((path, index) => ({
+  const files: MediaItem[] = paths.map((path, index) => ({
     id: `file-${index}`,
     resultId: null,
     rootId: 'series',
@@ -40,9 +53,110 @@ const previewFiles = (isLarge: boolean): MediaItem[] => {
     relativePath: path,
     size: 4_856_108 + index * 562_405,
     status: 'ready',
+    audio: {
+      overrideIndex: null,
+      probeError: null,
+      reason: 'single',
+      selectedIndex: 0,
+      tracks: [
+        {
+          channels: 2,
+          codec: 'aac',
+          index: 0,
+          language: 'es',
+          number: 1,
+          rawLanguage: 'spa',
+          title: '',
+          isAudioDescription: false,
+          isCommentary: false,
+          isDefault: true,
+        },
+      ],
+    },
     isAvailable: true,
     isIncluded: index !== 4,
   }));
+  if (!isLarge) {
+    const camera = files[1];
+    const notes = files[5];
+    // Two non-audio streams precede the camera audio, so stream indexes differ from track numbers.
+    camera.audio = {
+      ...camera.audio,
+      reason: 'default',
+      selectedIndex: 2,
+      tracks: [
+        {
+          ...camera.audio.tracks[0],
+          index: 2,
+          number: 1,
+          title: 'Spanish dialogue',
+        },
+        {
+          ...camera.audio.tracks[0],
+          index: 3,
+          language: 'en',
+          number: 2,
+          rawLanguage: 'eng',
+          title: 'English dialogue',
+          isDefault: false,
+        },
+      ],
+    };
+    notes.audio = {
+      ...notes.audio,
+      reason: 'default',
+      tracks: [
+        { ...notes.audio.tracks[0], language: 'fr', rawLanguage: 'fra' },
+        {
+          ...notes.audio.tracks[0],
+          index: 1,
+          language: 'de',
+          number: 2,
+          rawLanguage: 'deu',
+          isDefault: false,
+        },
+      ],
+    };
+  }
+  return files;
+};
+
+/** Mirror backend selection and cache invalidation for the development preview. */
+const updatePreviewAudio = (item: MediaItem, language: null | string) => {
+  const audio = item.audio;
+  const tracks = audio.tracks;
+  const override = tracks.find((track) => track.index === audio.overrideIndex);
+  const matches = tracks
+    .filter((track) => language && track.language === language)
+    .sort(
+      (left, right) =>
+        Number(left.isCommentary || left.isAudioDescription) -
+          Number(right.isCommentary || right.isAudioDescription) ||
+        Number(right.isDefault) - Number(left.isDefault) ||
+        left.number - right.number,
+    );
+  let track = tracks.find((entry) => entry.isDefault) ?? tracks[0];
+  let reason: AudioSelection['reason'] = language ? 'fallback' : 'default';
+  if (override) {
+    track = override;
+    reason = 'override';
+  } else if (tracks.length === 1) {
+    reason = 'single';
+  } else if (matches.length) {
+    track = matches[0];
+    reason = 'preferred';
+  }
+  const index = track?.index ?? null;
+  if (index !== audio.selectedIndex) {
+    item.resultId = null;
+    item.outputs = [];
+    item.noSpeech = false;
+    item.status = 'ready';
+    item.error = null;
+    item.errorStage = null;
+  }
+  audio.selectedIndex = index;
+  audio.reason = track ? reason : 'unavailable';
 };
 
 /** Install the generated bridge contract only for an explicitly requested development preview. */
@@ -67,9 +181,8 @@ export const createPyWebViewMock = () => {
   let state: BatchAppState = {
     closeRequested: false,
     collectionRevision: 0,
-    exportSettings: { destination: null, formats: ['srt'] },
+    exportSettings: defaultExports(),
     notice: null,
-    preferences: { interfaceLanguage: 'system', theme: 'system', version: 2 },
     revision: 0,
     batch: {
       activeItemId: null,
@@ -125,6 +238,12 @@ export const createPyWebViewMock = () => {
       dataDirectory: '/Preview/Syllentra Data',
       downloadDirectory: '/Preview/Models',
       path: '/Preview/Models/model_phonon25_f25x1_48k_int6',
+    },
+    preferences: {
+      interfaceLanguage: 'system',
+      preferredAudioLanguage: null,
+      theme: 'system',
+      version: 2,
     },
     scan: {
       currentPath: '',
@@ -324,7 +443,7 @@ export const createPyWebViewMock = () => {
         status: 'idle',
         total: 0,
       };
-      state.exportSettings = { destination: null, formats: ['srt'] };
+      state.exportSettings = defaultExports();
       results.clear();
       emit(true);
       return success();
@@ -345,23 +464,33 @@ export const createPyWebViewMock = () => {
       plan = {
         id: crypto.randomUUID(),
         revision: collection.revision,
-        items: selected.map((item, index) => ({
-          itemId: item.id,
-          resultId: null,
-          modifiedNs: item.modifiedNs,
-          size: item.size,
-          sourcePath: item.path,
-          outputs: state.exportSettings.formats.map((format) => ({
-            id: crypto.randomUUID(),
-            action: scenario === 'conflicts' && index === 0 ? 'ask' : 'create',
-            conflict: scenario === 'conflicts' && index === 0,
-            error: null,
-            existingSignature: null,
-            format,
-            path: `${item.path.replace(/\.[^.]+$/, '')}.${format}`,
-            status: 'planned',
-          })),
-        })),
+        items: selected.map((item, index) => {
+          const subtitleLanguage = getSubtitleLanguage(
+            item,
+            state.exportSettings,
+          );
+          const stem = item.path.replace(/\.[^.]+$/, '');
+          return {
+            itemId: item.id,
+            resultId: null,
+            audioStreamIndex: item.audio.selectedIndex,
+            modifiedNs: item.modifiedNs,
+            size: item.size,
+            sourcePath: item.path,
+            subtitleLanguage,
+            outputs: state.exportSettings.formats.map((format) => ({
+              id: crypto.randomUUID(),
+              conflict: scenario === 'conflicts' && index === 0,
+              error: null,
+              existingSignature: null,
+              format,
+              path: outputName(stem, format, subtitleLanguage),
+              status: 'planned',
+              action:
+                scenario === 'conflicts' && index === 0 ? 'ask' : 'create',
+            })),
+          };
+        }),
       };
       return Promise.resolve({ error: null, plan: structuredClone(plan) });
     },
@@ -388,13 +517,36 @@ export const createPyWebViewMock = () => {
       );
       return Promise.resolve({ error: null, plan: structuredClone(plan) });
     },
+    select_audio_track: (itemId, index) => {
+      const item = collection.items.find((entry) => entry.id === itemId);
+      if (item) {
+        item.audio.overrideIndex = index;
+        updatePreviewAudio(item, state.preferences.preferredAudioLanguage);
+      }
+      plan = null;
+      emit(true);
+      return success();
+    },
     set_appearance: (theme, interfaceLanguage) => {
-      state.preferences = { interfaceLanguage, theme, version: 2 };
+      state.preferences = {
+        ...state.preferences,
+        interfaceLanguage,
+        theme,
+        version: 2,
+      };
       emit();
+      return success();
+    },
+    set_audio_language: (language) => {
+      state.preferences.preferredAudioLanguage = language;
+      collection.items.forEach((item) => updatePreviewAudio(item, language));
+      plan = null;
+      emit(true);
       return success();
     },
     set_exports: (settings) => {
       state.exportSettings = structuredClone(settings);
+      plan = null;
       emit();
       return success();
     },

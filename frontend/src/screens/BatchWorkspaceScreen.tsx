@@ -7,6 +7,7 @@ import Checkbox from '@components/Checkbox';
 import Icon from '@components/Icon';
 import Modal from '@components/Modal';
 import Select from '@components/Select';
+import AudioTrackSummary from '@features/transcription/AudioTrackSummary';
 import BatchProgress from '@features/transcription/BatchProgress';
 import BatchSummary from '@features/transcription/BatchSummary';
 import ConflictReviewDialog from '@features/transcription/ConflictReviewDialog';
@@ -44,7 +45,9 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
   const [inspectedId, setInspectedId] = useState<null | string>(null);
   const [panel, setPanel] = useState<'details' | 'files'>('files');
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<
+    'audio' | 'general' | null
+  >(null);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [exportView, setExportView] = useState({
     batchId: '',
@@ -67,6 +70,8 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
       'start',
       'new',
       'model-files',
+      'audio-language',
+      'audio-track',
     ].some((key) => pending.has(key));
   const drop = useNativeDrop(isEditingDisabled, !!state && !!workspace);
   if (!state || !workspace) {
@@ -125,6 +130,13 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
       .catch(reportError);
   };
 
+  /** Apply the same per-file command from the sidebar and expanded inspector. */
+  const selectAudioTrack = (index: null | number) => {
+    if (inspected) {
+      act('audio-track', () => api.select_audio_track(inspected.id, index));
+    }
+  };
+
   /** Protect unexported session results before clearing the current collection. */
   const newBatch = () => {
     if (items.some((item) => item.resultId && item.errorStage === 'export')) {
@@ -169,7 +181,7 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
             className="size-9 min-h-9 px-2"
             icon="cog-outline"
             variant="ghost"
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() => setSettingsSection('general')}
           />
         </div>
       </header>
@@ -475,6 +487,16 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
               panel !== 'details' && 'hidden lg:flex',
             )}
           >
+            <AudioTrackSummary
+              inspectedId={inspected?.id ?? null}
+              items={items}
+              preferredLanguage={state.preferences.preferredAudioLanguage}
+              onInspect={(id) => {
+                inspect(id);
+                setPanel('details');
+              }}
+              onOpenSettings={() => setSettingsSection('audio')}
+            />
             <div className="border-ink/10 shrink-0 border-b">
               <h2>
                 <button
@@ -519,12 +541,14 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
               </div>
             </div>
             <ResultInspector
+              isEditingDisabled={isEditingDisabled}
               item={inspected}
               onCopy={copy}
               onExpand={() => setIsPreviewExpanded(true)}
               onOpen={(id, reveal) =>
                 act('open', () => api.open_artifact(id, reveal))
               }
+              onSelectTrack={selectAudioTrack}
             />
           </aside>
         </div>
@@ -653,11 +677,13 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
           </Button>
           <div className="flex h-[70dvh] min-h-0 flex-col">
             <ResultInspector
+              isEditingDisabled={isEditingDisabled}
               item={inspected}
               onCopy={copy}
               onOpen={(id, reveal) =>
                 act('open', () => api.open_artifact(id, reveal))
               }
+              onSelectTrack={selectAudioTrack}
             />
           </div>
         </Modal>
@@ -670,10 +696,13 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
           onConfirm={confirmPlan}
         />
       )}
-      {isSettingsOpen && (
+      {settingsSection && (
         <Modal
+          initialFocusId={
+            settingsSection === 'audio' ? 'preferred-audio-language' : undefined
+          }
           title={t('batch.settings')}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={() => setSettingsSection(null)}
         >
           <div className="mt-6 space-y-6">
             <div>
@@ -704,6 +733,34 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
                 <option value="en">English</option>
                 <option value="es-ES">Español (España)</option>
               </Select>
+            </div>
+            <div>
+              <label
+                className="mb-2 block text-sm"
+                htmlFor="preferred-audio-language"
+              >
+                {t('audio.preferredLanguage')}
+              </label>
+              <Select
+                disabled={isEditingDisabled}
+                id="preferred-audio-language"
+                value={state.preferences.preferredAudioLanguage ?? ''}
+                onChange={(event) =>
+                  act('audio-language', () =>
+                    api.set_audio_language(event.target.value || null),
+                  )
+                }
+              >
+                <option value="">{t('audio.fileDefault')}</option>
+                {state.modelInfo.languages.map((code) => (
+                  <option key={code} value={code}>
+                    {t(`batch.spokenLanguages.${code}`, { defaultValue: code })}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-ink/65 mt-2 text-xs leading-5">
+                {t('audio.preferenceHint')}
+              </p>
             </div>
             <div>
               <p className="mb-3 text-sm">{t('app.appearance')}</p>
@@ -824,7 +881,7 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
             </div>
           </div>
           <footer className="mt-6 flex justify-end">
-            <Button onClick={() => setIsSettingsOpen(false)}>
+            <Button onClick={() => setSettingsSection(null)}>
               {t('batch.done')}
             </Button>
           </footer>

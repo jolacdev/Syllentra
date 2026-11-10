@@ -39,7 +39,11 @@ def controlled_worker(connection: WorkerConnection, _cache: str) -> None:
         )
         if source.name == "hang.wav":
             Event().wait()
-        (Path(value["directory"]) / "result.json").write_text(json.dumps(OUTPUT), encoding="utf-8")
+        output = OUTPUT
+        if source.name == "track.wav":
+            text = f"Track {value['audioStreamIndex']}."
+            output = {**OUTPUT, "text": text, "segments": [{"id": 0, "start": 0.0, "end": 1.0, "text": text}]}
+        (Path(value["directory"]) / "result.json").write_text(json.dumps(output), encoding="utf-8")
         connection.send_bytes(json.dumps({"id": value["id"], "kind": "complete"}).encode())
 
 
@@ -84,6 +88,12 @@ class WorkerTests(unittest.TestCase):
                 self.engine.transcribe(Path("crash.wav"), Event(), ignore_phase)
             self.assertEqual(self.engine.transcribe(Path("retry.wav"), Event(), ignore_phase), OUTPUT)
 
+    def test_selected_stream_survives_spawn_protocol(self) -> None:
+        """The stream frozen by preflight must reach the reusable worker through JSON IPC."""
+        with patch.object(self.engine, "is_ready", return_value=True):
+            output = self.engine.transcribe(Path("track.wav"), Event(), ignore_phase, audio_stream_index=3)
+            self.assertEqual(output["text"], "Track 3.")
+
     def test_readiness_validates_content_and_not_only_filenames(self) -> None:
         """Corrupt or changed model assets must not be advertised as ready after restart."""
         self.engine.model_path.mkdir(parents=True)
@@ -118,7 +128,12 @@ class SessionStorageTests(unittest.TestCase):
                 preferences.path.write_text(original)
                 recovered, notice = preferences.read()
                 self.assertEqual(notice, "preferences_unreadable" if original == "{bad" else None)
-                expected: InterfacePreferences = {"version": 2, "theme": "light", "interfaceLanguage": "en"}
+                expected: InterfacePreferences = {
+                    "version": 2,
+                    "theme": "light",
+                    "interfaceLanguage": "en",
+                    "preferredAudioLanguage": None,
+                }
                 preferences.write(expected)
                 self.assertEqual(preferences.backup.read_text(), original)
                 preferences.write(recovered)

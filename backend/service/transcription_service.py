@@ -30,6 +30,7 @@ from service.export_service import ExportService
 from service.file_selection_service import FileSelectionService
 from service.preferences_service import PreferencesService
 from service.result_service import ResultService
+from utils.language_utils import normalize_language
 
 logger = logging.getLogger(__name__)
 REPORT_INTERVAL = 0.25
@@ -73,6 +74,11 @@ def empty_scan() -> ScanState:
     }
 
 
+def default_exports() -> ExportSettings:
+    """Start each batch with plain SRT filenames beside their sources."""
+    return {"formats": ["srt"], "destination": None, "includeAudioLanguage": False}
+
+
 class TranscriptionService:
     """Own selection, admission, preferences, queue transitions, and session result references."""
 
@@ -82,11 +88,11 @@ class TranscriptionService:
         """Compose concrete services without loading weights or reading source recordings."""
         self.engine = engine
         self._lock = RLock()
-        self._files = FileSelectionService()
         self._exports = ExportService()
         self._results = ResultService()
         self._preferences = PreferencesService(directory)
         preferences, notice = self._preferences.read()
+        self._files = FileSelectionService(preferences["preferredAudioLanguage"])
         self._publish_callback: Callable[[BatchAppState], None] | None = None
         self._operation: Literal["scan", "planning", "setup", "batch"] | None = None
         self._thread: Thread | None = None
@@ -104,7 +110,7 @@ class TranscriptionService:
             "modelLocation": location
             or {"path": "", "downloadDirectory": "", "dataDirectory": str(directory)},
             "preferences": preferences,
-            "exportSettings": {"formats": ["srt"], "destination": None},
+            "exportSettings": default_exports(),
             "scan": empty_scan(),
             "model": {
                 "status": "ready" if engine.is_ready() else "missing",
@@ -167,10 +173,39 @@ class TranscriptionService:
         """Persist validated interface choices without changing the current recording workflow."""
         if theme not in ("system", "light", "dark") or language not in ("system", "en", "es-ES"):
             raise ValueError("Choose a supported interface language and appearance.")
-        preferences: InterfacePreferences = {"version": 2, "theme": theme, "interfaceLanguage": language}
         with self._lock:
+            preferences: InterfacePreferences = {
+                **self._state["preferences"],
+                "theme": theme,
+                "interfaceLanguage": language,
+            }
             self._preferences.write(preferences)
             self._state["preferences"] = preferences
+        self._publish()
+
+    def set_audio_language(self, language: str | None) -> None:
+        """Remember an optional multi-track preference and invalidate stale stream/output plans."""
+        normalized = normalize_language(language) if isinstance(language, str) else None
+        if language is not None and normalized not in self.engine.get_info()["languages"]:
+            raise ValueError("Choose a supported preferred audio language or use the file default.")
+        with self._lock:
+            self._require_idle()
+            preferences: InterfacePreferences = {
+                **self._state["preferences"],
+                "preferredAudioLanguage": normalized,
+            }
+            self._preferences.write(preferences)
+            self._state["preferences"] = preferences
+            self._files.set_audio_language(normalized)
+            self._plan = None
+        self._publish()
+
+    def select_audio_track(self, item_id: str, stream_index: int | None) -> None:
+        """Apply a known file's override without permitting a frontend-supplied media path."""
+        with self._lock:
+            self._require_idle()
+            self._files.select_audio_track(item_id, stream_index)
+            self._plan = None
         self._publish()
 
     def import_paths(self, paths: list[str]) -> None:
@@ -236,12 +271,15 @@ class TranscriptionService:
             raise ValueError("Choose SRT, TXT, or VTT output formats.")
         if len(set(settings["formats"])) != len(settings["formats"]):
             raise ValueError("Choose each output format once.")
+        include_language = settings.get("includeAudioLanguage", False)
+        if not isinstance(include_language, bool):
+            raise ValueError("Choose whether to include audio language in subtitle filenames.")
         destination = settings["destination"]
         if destination is not None and not Path(destination).is_dir():
             raise ValueError("Choose an existing destination folder.")
         with self._lock:
             self._require_idle()
-            self._state["exportSettings"] = deepcopy(settings)
+            self._state["exportSettings"] = {**deepcopy(settings), "includeAudioLanguage": include_language}
             self._plan = None
         self._publish()
 
@@ -392,7 +430,9 @@ class TranscriptionService:
         item["resultId"] = None
         self._phase("preparing", None)
         started = monotonic()
-        output = self.engine.transcribe(source, self._cancel, self._phase)
+        output = self.engine.transcribe(
+            source, self._cancel, self._phase, audio_stream_index=planned["audioStreamIndex"]
+        )
         if self._cancel.is_set():
             raise CancelledError
         result_id = self._results.put(item["id"], item["path"], output, monotonic() - started)
@@ -632,7 +672,7 @@ class TranscriptionService:
                 {
                     "batch": empty_batch(),
                     "scan": empty_scan(),
-                    "exportSettings": {"formats": ["srt"], "destination": None},
+                    "exportSettings": default_exports(),
                     "notice": None,
                 }
             )

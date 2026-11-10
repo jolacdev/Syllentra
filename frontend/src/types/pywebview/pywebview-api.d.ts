@@ -39,11 +39,13 @@ export type InterfacePreferences = {
   version: 2;
   theme: "system" | "light" | "dark";
   interfaceLanguage: "system" | "en" | "es-ES";
+  preferredAudioLanguage: string | null;
 };
 
 export type ExportSettings = {
   formats: Array<"srt" | "txt" | "vtt">;
   destination: string | null;
+  includeAudioLanguage: boolean;
 };
 
 export type ScanState = {
@@ -125,6 +127,7 @@ export type MediaItem = {
   resultId: string | null;
   noSpeech: boolean;
   outputs: Array<OutputArtifact>;
+  audio: AudioSelection;
 };
 
 export type OutputArtifact = {
@@ -136,6 +139,27 @@ export type OutputArtifact = {
   conflict: boolean;
   existingSignature: string | null;
   error: string | null;
+};
+
+export type AudioSelection = {
+  tracks: Array<AudioTrack>;
+  selectedIndex: number | null;
+  overrideIndex: number | null;
+  reason: "single" | "preferred" | "default" | "fallback" | "override" | "unavailable";
+  probeError: string | null;
+};
+
+export type AudioTrack = {
+  index: number;
+  number: number;
+  language: string | null;
+  rawLanguage: string | null;
+  title: string;
+  codec: string;
+  channels: number;
+  isDefault: boolean;
+  isCommentary: boolean;
+  isAudioDescription: boolean;
 };
 
 export type PlanReply = {
@@ -156,6 +180,8 @@ export type ItemPlan = {
   modifiedNs: string;
   resultId: string | null;
   outputs: Array<OutputArtifact>;
+  audioStreamIndex: number | null;
+  subtitleLanguage: string | null;
 };
 
 export type BridgeState = {
@@ -199,8 +225,12 @@ export interface PyWebViewApi {
   quit_app(): Promise<CommandReply>;
   /** Apply explicit skip, overwrite, or shared-stem rename decisions to known artifacts. */
   resolve_conflicts(plan_id: string, artifact_ids: Array<string>, action: "ask" | "create" | "skip" | "overwrite" | "rename"): Promise<PlanReply>;
+  /** Override a recording's selected audio stream or restore automatic selection with null. */
+  select_audio_track(item_id: string, stream_index: number | null): Promise<CommandReply>;
   /** Persist interface language and appearance independently of spoken language. */
   set_appearance(theme: "system" | "light" | "dark", language: "system" | "en" | "es-ES"): Promise<CommandReply>;
+  /** Remember an optional preferred language used only for recordings with multiple audio tracks. */
+  set_audio_language(language: string | null): Promise<CommandReply>;
   /** Set batch-scoped format choices and a validated destination mode. */
   set_exports(settings: ExportSettings): Promise<CommandReply>;
   /** Apply file, folder, or extension selections to the same backend-owned leaves. */

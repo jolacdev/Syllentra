@@ -5,12 +5,15 @@ import { formatDuration } from '@utils/formatDuration';
 import { formatSizeUnit } from '@utils/formatSizeUnit';
 import type { MediaItem } from 'types/pywebview/pywebview-api';
 
+import AudioTrackPicker from './AudioTrackPicker';
 import { useTranscript } from './useTranscript';
 
 type ResultInspectorProps = {
   item: MediaItem | null;
+  isEditingDisabled: boolean;
   onCopy: (text: string) => void;
   onOpen: (id: string, reveal: boolean) => void;
+  onSelectTrack: (index: null | number) => void;
   onExpand?: () => void;
 };
 
@@ -20,6 +23,8 @@ const ResultInspector = ({
   onCopy,
   onExpand = undefined,
   onOpen,
+  onSelectTrack,
+  isEditingDisabled,
 }: ResultInspectorProps) => {
   const { t } = useTranslation();
   const { error, navigate, offset, page, text } = useTranscript(item);
@@ -62,6 +67,11 @@ const ResultInspector = ({
           </summary>
           <p className="mt-2 break-all">{item.path}</p>
         </details>
+        <AudioTrackPicker
+          isDisabled={isEditingDisabled}
+          item={item}
+          onSelect={onSelectTrack}
+        />
         {item.error && (
           <div
             className="border-danger/20 bg-danger/5 text-danger mt-4 rounded-lg border p-3 text-xs"

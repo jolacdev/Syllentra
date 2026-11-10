@@ -14,6 +14,12 @@ Model setup shows status and elapsed time. Finished batches show outcome counts 
 
 Closing during active work asks for confirmation. **Keep open** continues processing; **Stop & quit** stops the work before closing and preserves files already exported.
 
+**Audio tracks:** The optional **Preferred audio language** in general **Settings** applies only to files containing multiple audio tracks. It starts at **Use file default** and remembers your choice. Single-track recordings always use their only track, regardless of language. For multi-track files, standard ISO language codes and BCP 47 tags are normalized independently for each source; matching dialogue tracks take priority over commentary/audio description identified by standard track flags, then default flags and track order break ties. Without a language match, the file’s default or first audio track is used automatically. The workspace summarizes selections and fallback files without interrupting the queue. File details show track metadata and allow a manual override. Changing the effective track invalidates the previous session transcript; existing exports still use the normal output-conflict review.
+
+Track languages are read from container metadata, which may be absent or incorrect; they are not verified against the spoken audio. The model independently recognizes the audio it receives.
+
+Enable **Include audio language in subtitle filenames** in **Export settings** to get names like `Recording.en.srt` or `Recording.en.vtt` when the selected track has a recognized language tag. Files with unknown tags and TXT exports use plain filenames. This option is off by default and resets with each new batch.
+
 Silence produces no empty outputs. Recoverable file errors allow the queue to continue; model-loading failures halt it. Failed exports can reuse the session transcript. Selections and previews last for the session; saved exports persist. Clearing or quitting protects transcripts with unsaved outputs. Settings supports English/Spanish and system/light/dark appearance, and lists the active model’s supported spoken languages.
 
 ## Models and portable storage

@@ -30,7 +30,11 @@ class BatchFilesTests(unittest.TestCase):
         (self.sources / "notes.md").write_text("ignored")
         self.files = FileSelectionService()
         self.exports = ExportService()
-        self.settings: ExportSettings = {"formats": ["srt", "txt"], "destination": None}
+        self.settings: ExportSettings = {
+            "formats": ["srt", "txt"],
+            "destination": None,
+            "includeAudioLanguage": False,
+        }
         self.result: InferenceOutput = {
             "text": "A <local> recording.",
             "duration": 2.0,

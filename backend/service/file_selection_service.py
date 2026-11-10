@@ -8,7 +8,8 @@ from pathlib import Path
 from threading import Event, RLock
 from uuid import uuid4
 
-from schemas.batch import MediaItem, SourceRoot, Workspace, WorkspaceDelta
+from schemas.batch import AudioSelection, MediaItem, SourceRoot, Workspace, WorkspaceDelta
+from utils.audio_tracks import inspect_audio, resolve_audio
 from utils.media_utils import is_media_file
 
 DiscoveryCallback = Callable[[str, int, int, int], None]
@@ -17,7 +18,7 @@ DiscoveryCallback = Callable[[str, int, int, int], None]
 class FileSelectionService:
     """Own source identities and selection without dialogs, engines, or output decisions."""
 
-    def __init__(self) -> None:
+    def __init__(self, preferred_audio_language: str | None = None) -> None:
         """Initialize a session-local collection with no filesystem side effects."""
         self._lock = RLock()
         self._roots: dict[str, SourceRoot] = {}
@@ -27,6 +28,48 @@ class FileSelectionService:
         self._paths: dict[str, str] = {}
         self._revision = 0
         self._changes: deque[tuple[int, str | None]] = deque(maxlen=4096)
+        self._preferred_audio_language = preferred_audio_language
+
+    def set_audio_language(self, language: str | None) -> None:
+        """Recompute each automatic choice without rereading media or changing explicit overrides."""
+        with self._lock:
+            self._preferred_audio_language = language
+            for item in self._items.values():
+                self._set_audio(item, resolve_audio(item["audio"], language))
+
+    def select_audio_track(self, item_id: str, stream_index: int | None) -> None:
+        """Validate a file-specific stream identity or restore its automatic batch policy."""
+        with self._lock:
+            item = self.get(item_id)
+            if stream_index is not None and (
+                type(stream_index) is not int
+                or not any(track["index"] == stream_index for track in item["audio"]["tracks"])
+            ):
+                raise ValueError("Choose an audio track from this recording.")
+            audio = resolve_audio(
+                {**item["audio"], "overrideIndex": stream_index}, self._preferred_audio_language
+            )
+            self._set_audio(item, audio)
+            self._items[item_id] = item
+
+    def _set_audio(self, item: MediaItem, audio: AudioSelection) -> None:
+        """Invalidate retained speech only when the effective audio source changes."""
+        previous = item["audio"]
+        if audio == previous:
+            return
+        if audio["selectedIndex"] != previous["selectedIndex"]:
+            item.update(
+                {
+                    "resultId": None,
+                    "outputs": [],
+                    "noSpeech": False,
+                    "status": "ready",
+                    "error": None,
+                    "errorStage": None,
+                }
+            )
+        item["audio"] = audio
+        self._changed(item["id"])
 
     def _changed(self, item_id: str | None) -> None:
         """Record a bounded row change or structural reset without copying the collection."""
@@ -207,9 +250,27 @@ class FileSelectionService:
             known_id = self._paths.get(key) or (
                 self._identities.get(identity) if identity is not None else None
             )
+            previous = self._items.get(known_id) if known_id else None
+            unchanged = previous is not None and (
+                previous["size"],
+                previous["modifiedNs"],
+                previous["isAvailable"],
+            ) == (size, str(modified), error is None)
+        # Keep container probing outside the collection lock so large imports remain responsive.
+        audio = (
+            previous["audio"]
+            if unchanged and previous
+            else inspect_audio(canonical, self._preferred_audio_language)
+        )
+        with self._lock:
+            known_id = self._paths.get(key) or (
+                self._identities.get(identity) if identity is not None else None
+            )
             if known_id is not None:
                 self._paths[key] = known_id
                 self._refresh(known_id, canonical, (size, modified), error, identity)
+                if not unchanged:
+                    self._items[known_id]["audio"] = audio
                 return False
             item: MediaItem = {
                 "id": uuid4().hex,
@@ -228,6 +289,7 @@ class FileSelectionService:
                 "resultId": None,
                 "noSpeech": False,
                 "outputs": [],
+                "audio": audio,
             }
             self._paths[key] = item["id"]
             if identity is not None:

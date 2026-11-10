@@ -36,7 +36,9 @@ class FakeBatchEngine:
             raise CancelledError
         self.ready = True
 
-    def transcribe(self, source: Path, cancel: Event, report: PhaseCallback) -> InferenceOutput:
+    def transcribe(
+        self, source: Path, cancel: Event, report: PhaseCallback, *, audio_stream_index: int | None = None
+    ) -> InferenceOutput:
         """Return deterministic speech or pause at a cancellable inference boundary."""
         self.calls.append(source.name)
         report("transcribing", None)
@@ -122,7 +124,9 @@ class BatchServiceTests(unittest.TestCase):
     def test_exports_all_formats_once_per_file(self) -> None:
         """A serial mixed batch must produce each requested format with one inference pass."""
         self._import("a.wav", "b.mp4")
-        self.service.set_exports({"formats": ["srt", "txt", "vtt"], "destination": None})
+        self.service.set_exports(
+            {"formats": ["srt", "txt", "vtt"], "destination": None, "includeAudioLanguage": False}
+        )
         self._start()
         self.assertEqual(self.engine.calls, ["a.wav", "b.mp4"])
         self.assertEqual(self.service.snapshot()["batch"]["completed"], 2)
@@ -178,7 +182,9 @@ class BatchServiceTests(unittest.TestCase):
     def test_partial_export_retries_without_inference_or_source(self) -> None:
         """A retained transcript must recover a failed artifact while preserving a successful format."""
         self._import("a.wav")
-        self.service.set_exports({"formats": ["srt", "txt"], "destination": None})
+        self.service.set_exports(
+            {"formats": ["srt", "txt"], "destination": None, "includeAudioLanguage": False}
+        )
         original = self.service._exports.write
 
         def fail_subtitle(output: OutputArtifact, result: InferenceOutput) -> OutputArtifact:
@@ -326,9 +332,12 @@ class BatchServiceTests(unittest.TestCase):
     def test_new_batch_restores_defaults_without_deleting_outputs(self) -> None:
         """Starting another batch must clear session references and restore SRT beside-source defaults."""
         self._import("a.wav")
-        self.service.set_exports({"formats": ["txt"], "destination": None})
+        self.service.set_exports({"formats": ["txt"], "destination": None, "includeAudioLanguage": True})
         self._start()
         self.service.new_batch()
         self.assertEqual(self.service.workspace()["items"], [])
-        self.assertEqual(self.service.snapshot()["exportSettings"], {"formats": ["srt"], "destination": None})
+        self.assertEqual(
+            self.service.snapshot()["exportSettings"],
+            {"formats": ["srt"], "destination": None, "includeAudioLanguage": False},
+        )
         self.assertTrue((self.sources / "a.txt").exists())

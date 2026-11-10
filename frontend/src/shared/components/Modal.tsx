@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 
 type ModalProps = {
+  initialFocusId?: string;
   children: ReactNode;
   title: string;
   isDismissible?: boolean;
@@ -11,6 +12,7 @@ type ModalProps = {
 
 /** Give workflow dialogs native focus trapping, Escape handling, and focus restoration. */
 const Modal = ({
+  initialFocusId = undefined,
   children,
   onClose,
   title,
@@ -23,13 +25,16 @@ const Modal = ({
     const previous = document.activeElement;
     const element = dialog.current;
     element?.showModal();
+    if (initialFocusId) {
+      document.getElementById(initialFocusId)?.focus();
+    }
     return () => {
       element?.close();
       if (previous instanceof HTMLElement && previous.isConnected) {
         previous.focus();
       }
     };
-  }, []);
+  }, [initialFocusId]);
   return (
     <dialog
       ref={dialog}
