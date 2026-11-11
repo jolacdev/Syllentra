@@ -7,6 +7,7 @@ import json
 import multiprocessing
 import os
 import shutil
+import stat
 import sys
 from collections.abc import Callable
 from multiprocessing.process import BaseProcess
@@ -39,6 +40,7 @@ type WorkerConnection = _PlatformConnection
 
 REPORT_INTERVAL = 0.25
 MODEL_ID = "FermionResearch/Phonon-2.5"
+MODEL_PATH = Path("speech") / "FermionResearch__Phonon-2.5" / MODEL_FOLDER
 # These members belong to the canonical profile pinned by fermion-research 0.2.15.
 MODEL_FILES = {
     "config.json": "b8ee2310784b2ffb62200bc9d2301cdc0576141ee9c53f7a41a5a2d181910cc9",
@@ -155,6 +157,10 @@ def run_worker(connection: WorkerConnection, cache: str) -> None:
     """Resolve heavy speech modules only inside a spawned process and reuse one loaded model."""
     os.environ["FERMION_CACHE_DIR"] = cache
     os.environ["HF_HOME"] = str(Path(cache) / "hub")
+    os.environ["HF_HUB_CACHE"] = str(Path(cache) / "hub" / "cache")
+    os.environ["HF_XET_CACHE"] = str(Path(cache) / "hub" / "xet")
+    os.environ["HF_ASSETS_CACHE"] = str(Path(cache) / "hub" / "assets")
+    os.environ["HF_TOKEN_PATH"] = str(Path(cache) / "hub" / "token")
     speech: fermion.SpeechModel | None = None
     try:
         while True:
@@ -202,13 +208,14 @@ class PhononEngine:
 
     def __init__(self, directory: Path, worker_target: WorkerTarget = run_worker) -> None:
         """Keep model paths local and defer native imports and weights until setup or transcription."""
-        self.directory = directory
-        self.model_path = directory / "speech" / "FermionResearch__Phonon-2.5" / MODEL_FOLDER
+        self.directory = directory.absolute()
+        self.model_path = self.directory / MODEL_PATH
         self._context = multiprocessing.get_context("spawn")
         self._lock = RLock()
         self._process: BaseProcess | None = None
         self._connection: WorkerConnection | None = None
         self._worker_target = worker_target
+        self._worker_cache: TemporaryDirectory[str] | None = None
         self._verified: tuple[tuple[str, int, int, int], ...] | None = None
 
     def get_info(self) -> ModelInfo:
@@ -248,6 +255,8 @@ class PhononEngine:
     def is_ready(self) -> bool:
         """Inspect only the expected local assets without using the network or loading native code."""
         try:
+            if self.model_path.resolve() != self.model_path:
+                return False
             signatures = []
             for name in MODEL_FILES:
                 path = self.model_path / name
@@ -266,13 +275,17 @@ class PhononEngine:
         except OSError:
             return False
 
-    def _start(self) -> WorkerConnection:
+    def _start(self, cache: Path | None) -> WorkerConnection:
         """Start a clean child with a private connection and no native window side effects."""
         if self._process is None or not self._process.is_alive() or self._connection is None:
             self._stop()
+            if cache is None:
+                self._ensure_model_directory(self.directory)
+                self._worker_cache = TemporaryDirectory(prefix="syllentra-worker-", dir=self.directory)
+                cache = Path(self._worker_cache.name)
             parent, child = self._context.Pipe()
             self._process = self._context.Process(
-                target=self._worker_target, args=(child, str(self.directory)), daemon=True
+                target=self._worker_target, args=(child, str(cache)), daemon=True
             )
             self._process.start()
             child.close()
@@ -299,18 +312,23 @@ class PhononEngine:
             self._connection.close()
         self._process = None
         self._connection = None
+        if self._worker_cache is not None:
+            self._worker_cache.cleanup()
+            self._worker_cache = None
 
     def _execute(
         self,
         request: WorkerRequest,
         cancel: Event,
         report: PhaseCallback,
+        *,
+        cache: Path | None = None,
     ) -> None:
         """Wait for one identified request while allowing bounded cancellation and crash detection."""
         with self._lock:
             if cancel.is_set():
                 raise CancelledError
-            connection = self._start()
+            connection = self._start(cache)
             request_id = uuid4().hex
             connection.send_bytes(
                 json.dumps(
@@ -356,40 +374,80 @@ class PhononEngine:
                     "The transcription worker stopped unexpectedly. Retry this recording."
                 ) from error
 
-    def setup(self, cancel: Event, report: PhaseCallback) -> None:
-        """Acquire and validate the one model only after an explicit setup command."""
+    def _ensure_model_directory(self, path: Path) -> None:
+        """Create a portable directory after checking for redirected ancestors."""
+        if path.resolve() != path:
+            raise ValueError(f"Model storage cannot use linked directories: {path}")
+        path.mkdir(parents=True, exist_ok=True)
+
+    def _require_free_model_path(self) -> None:
+        """Keep occupied or redirected model paths untouched."""
+        if self.model_path.exists() or self.model_path.is_symlink() or self.model_path.is_junction():
+            raise FileExistsError(
+                f"Move the incomplete or occupied model folder before retrying: {self.model_path}"
+            )
+
+    def _install_model(self, staging: Path) -> None:
+        """Publish only a complete, verified copy from portable staging."""
+        self._verify_model(staging)
+        self._ensure_model_directory(self.model_path.parent)
+        self._require_free_model_path()
+        staging.rename(self.model_path)
+
+    def _verify_model(self, staging: Path) -> None:
+        """Check the pinned files without changing the active model."""
+        verifier = PhononEngine(staging.parent)
+        verifier.model_path = staging
+        if not verifier.is_ready():
+            raise ValueError("The selected files do not match the verified Phonon-2.5 Multilingual model.")
+
+    def import_model(self, source: Path) -> None:
+        """Copy only pinned model assets into the portable store."""
         with self._lock:
-            canonical = self.directory / "speech" / "FermionResearch__Phonon-2.5" / MODEL_FOLDER
-            if self.model_path != canonical:
-                raise ValueError(
-                    "Choose a download folder in Settings before downloading. "
-                    "The current model is an external reference."
-                )
+            source = source.resolve(strict=True)
+            if source.name != MODEL_FOLDER:
+                raise ValueError(f"Select the model folder named {MODEL_FOLDER}.")
+            if self.is_ready():
+                # All supported imports have the same pinned bytes.
+                if source != self.model_path:
+                    self._verify_model(source)
+                return
+            self._require_free_model_path()
+            self._ensure_model_directory(self.directory)
+            with TemporaryDirectory(prefix="syllentra-import-", dir=self.directory) as temporary:
+                staging = Path(temporary) / MODEL_FOLDER
+                staging.mkdir()
+                for name in MODEL_FILES:
+                    member = source / name
+                    if not stat.S_ISREG(member.lstat().st_mode) or member.resolve() != member:
+                        raise ValueError(f"Expected a regular model file: {member}")
+                    shutil.copyfile(member, staging / name)
+                self._install_model(staging)
+
+    def setup(self, cancel: Event, report: PhaseCallback) -> None:
+        """Download in portable staging and install a verified model."""
+        with self._lock:
             if cancel.is_set():
                 raise CancelledError
-            self.model_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.is_ready():
+                return
+            self._require_free_model_path()
+            self._ensure_model_directory(self.directory)
             self._stop()
-            with TemporaryDirectory(prefix="syllentra-repair-", dir=self.model_path.parent) as temporary:
-                previous = Path(temporary) / "previous"
-                if self.model_path.exists() and not self.is_ready():
-                    self.model_path.rename(previous)
+            with TemporaryDirectory(prefix="syllentra-download-", dir=self.directory) as temporary:
+                cache = Path(temporary)
                 try:
                     self._execute(
                         {"mode": "setup", "source": "", "directory": "", "audioStreamIndex": None},
                         cancel,
                         report,
+                        cache=cache,
                     )
-                    if not self.is_ready():
-                        raise RuntimeError(
-                            "Model setup finished without valid local assets. Retry preparation."
-                        )
-                except BaseException:
+                finally:
                     self._stop()
-                    if previous.exists():
-                        if self.model_path.exists():
-                            shutil.rmtree(self.model_path)
-                        previous.rename(self.model_path)
-                    raise
+                if cancel.is_set():
+                    raise CancelledError
+                self._install_model(cache / MODEL_PATH)
 
     def transcribe(
         self, source: Path, cancel: Event, report: PhaseCallback, *, audio_stream_index: int | None = None

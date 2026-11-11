@@ -207,8 +207,8 @@ class PyWebViewApi:
         """Cancel active and queued work while retaining every committed artifact."""
         return self._command(partial(self._service.stop_batch, batch_id))
 
-    def _model_files(self, action: str) -> None:
-        """Resolve native folder selections and serialize model changes with queue admission."""
+    def _import_local_model(self) -> None:
+        """Resolve the selected source folder and serialize model import with queue admission."""
         models = self._models
         if models is None:
             raise ValueError("Model storage is unavailable in this host.")
@@ -216,22 +216,11 @@ class PyWebViewApi:
         if not selected:
             return
         path = Path(str(selected[0]))
-        operation = {"local": models.use_local, "storage": models.choose_storage, "backup": models.backup}[
-            action
-        ]
-        self._service.manage_model(partial(operation, path), models.location)
+        self._service.manage_model(partial(models.use_local, path), models.location)
 
     def use_local_model(self) -> CommandReply:
-        """Select a verified local Phonon folder for completely offline first use."""
-        return self._command(partial(self._model_files, "local"))
-
-    def choose_model_storage(self) -> CommandReply:
-        """Choose the directory used for future model downloads without deleting existing copies."""
-        return self._command(partial(self._model_files, "storage"))
-
-    def backup_model(self) -> CommandReply:
-        """Export a verified model folder to a selected destination for offline machines."""
-        return self._command(partial(self._model_files, "backup"))
+        """Import a verified local Phonon folder into the portable installation."""
+        return self._command(self._import_local_model)
 
     def setup_model(self) -> CommandReply:
         """Explicitly acquire and prepare Phonon-2.5 Multilingual."""

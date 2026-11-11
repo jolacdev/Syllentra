@@ -1,17 +1,25 @@
 import toast, { ToastBar, Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { cn } from '@utils/cn';
 
 import Icon from './Icon';
 
 /** Float dismissible feedback without moving the workspace or stealing keyboard focus. */
-export const Notifications = () => {
+export const Notifications = ({
+  toasterId = undefined,
+  containerStyle = undefined,
+}: {
+  toasterId?: string;
+  containerStyle?: CSSProperties;
+}) => {
   const { t } = useTranslation();
   return (
     <Toaster
+      containerStyle={containerStyle}
       position="bottom-right"
+      toasterId={toasterId}
       toastOptions={{
         duration: 4000,
         error: { duration: Infinity },
@@ -46,7 +54,7 @@ export const Notifications = () => {
                 aria-label={t('common.dismissNotification')}
                 className="text-ink/70 hover:bg-ink/5 self-start rounded-lg p-1.5"
                 type="button"
-                onClick={() => toast.dismiss(notification.id)}
+                onClick={() => toast.dismiss(notification.id, toasterId)}
               >
                 <Icon className="size-4" name="close" />
               </button>

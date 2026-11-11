@@ -22,7 +22,7 @@ Recipients need pywebview's [.NET Framework and WebView2 prerequisites](https://
 
 Move the application folder out of `dist` before first use. **Syllentra Data** is created automatically next to the application. Move the entire folder when transferring the app; exclude personal data when distributing a fresh copy.
 
-For offline first use, transfer a verified model backup and select it with **Use local model**. See [portable storage](../README.md#portable-by-default) for upgrades and system-storage fallback.
+For offline first use, transfer the verified model folder and select it with **Import local model**. See [portable storage](../README.md#portable-by-default).
 
 ## GitHub Actions
 

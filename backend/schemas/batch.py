@@ -219,10 +219,9 @@ class ModelInfo(TypedDict):
 
 
 class ModelLocation(TypedDict):
-    """Expose the actual local model and download directory without accepting frontend paths."""
+    """Expose the portable data and model directories."""
 
     path: str
-    downloadDirectory: str
     dataDirectory: str
 
 

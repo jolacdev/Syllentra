@@ -1,5 +1,6 @@
 import logging
 import os
+import stat
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -34,23 +35,27 @@ def setup_logging(
     )
 
     # Log Absolute Path
-    log_dir = str(directory) if directory is not None else user_log_dir(app_name)
-    log_file_path = os.path.join(log_dir, filename)
-
-    # Ensure log directory exists
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Rotating file handler
-    file_handler = RotatingFileHandler(
-        log_file_path, maxBytes=5 * 1024 * 1024, backupCount=1, encoding="utf-8"
-    )
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(formatter)
-
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
 
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+    log_dir = (directory or Path(user_log_dir(app_name))).absolute()
+    log_file = log_dir / filename
+    if log_dir.resolve() != log_dir:
+        logger.warning("Skipping log output in linked directory %s", log_dir)
+        return
+    for path in (log_file, log_file.with_name(f"{log_file.name}.1")):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or path.resolve() != path:
+            logger.warning("Skipping log output because %s is not a standalone file", path)
+            return
+    os.makedirs(log_dir, exist_ok=True)
+    file_handler = RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=1, encoding="utf-8")
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)

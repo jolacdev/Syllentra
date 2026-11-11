@@ -14,6 +14,8 @@ import numpy as np
 from av.audio.frame import AudioFrame
 from av.audio.resampler import AudioResampler
 
+from utils.media_utils import open_recording
+
 SAMPLE_RATE = 16_000
 AudioProgress = Callable[[float | None], None]
 
@@ -75,7 +77,7 @@ def prepare_audio(
     with NamedTemporaryFile(dir=directory, suffix=".f32", delete=False) as handle:
         temporary = Path(handle.name)
     try:
-        with av.open(str(source)) as container:
+        with open_recording(source) as container:
             streams = list(container.streams.audio)
             if not streams:
                 raise ValueError("This recording has no audio stream.")

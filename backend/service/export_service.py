@@ -1,5 +1,6 @@
 """Plan collision-free output sets and commit each artifact without silent clobbering."""
 
+import ntpath
 import os
 import stat
 from copy import deepcopy
@@ -24,18 +25,26 @@ def _key(path: Path) -> str:
     return str(path.absolute()).casefold()
 
 
-def _signature(path: Path) -> str | None:
+def _signature(path: Path, *, overwrite: bool = False) -> str | None:
     """Fingerprint an existing directory entry without following output symlinks."""
     try:
         info = path.lstat()
     except FileNotFoundError:
         return None
-    return f"{info.st_dev}:{info.st_ino}:{info.st_mode}:{info.st_size}:{info.st_mtime_ns}"
+    if overwrite and (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    ):
+        raise ValueError(f"Only regular output files without other links can be overwritten: {path}")
+    return f"{info.st_dev}:{info.st_ino}:{info.st_mode}:{info.st_size}:{info.st_mtime_ns}:{info.st_nlink}"
 
 
 def _check_parent(path: Path) -> None:
     """Reject non-directory destination ancestors before inference without creating output folders."""
     parent = path.parent
+    if parent.resolve() != parent:
+        raise ValueError(f"The output folder uses a linked or redirected path: {parent}")
     while not parent.exists() and not parent.is_symlink():
         parent = parent.parent
     if not parent.is_dir() or parent.is_symlink() or not os.access(parent, os.W_OK | os.X_OK):
@@ -187,10 +196,12 @@ class ExportService:
             else:
                 for output in affected:
                     path = Path(output["path"])
-                    if action == "overwrite" and (path.is_symlink() or not path.is_file()):
-                        raise ValueError(f"Only regular output files can be overwritten: {path}")
+                    if action == "overwrite" and (
+                        output["existingSignature"] is None
+                        or _signature(path, overwrite=True) != output["existingSignature"]
+                    ):
+                        raise FileExistsError(f"The output changed after review: {path}")
                     output["action"] = action
-                    output["existingSignature"] = _signature(path)
         return plan
 
     def write(self, output: OutputArtifact, transcript: InferenceOutput) -> OutputArtifact:
@@ -204,6 +215,10 @@ class ExportService:
         if artifact["action"] == "ask":
             raise ValueError("Resolve existing outputs before starting the batch.")
         target = Path(artifact["path"])
+        if target.suffix != f".{artifact['format']}" or artifact["format"] not in ("srt", "txt", "vtt"):
+            raise ValueError(f"Invalid subtitle output path: {target}")
+        if os.name == "nt" and any(ntpath.isreserved(part) for part in target.parts[1:]):
+            raise ValueError(f"Invalid Windows output path: {target}")
         _check_parent(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.parent.resolve() != target.parent:
@@ -219,11 +234,9 @@ class ExportService:
                 handle.flush()
                 os.fsync(handle.fileno())
             if artifact["action"] == "overwrite":
-                signature = _signature(target)
-                if signature != artifact["existingSignature"] or target.is_symlink():
+                signature = _signature(target, overwrite=True)
+                if signature is None or signature != artifact["existingSignature"]:
                     raise FileExistsError(f"The output changed after review: {target}")
-                if signature is not None and not stat.S_ISREG(target.lstat().st_mode):
-                    raise FileExistsError(f"The output is no longer a regular file: {target}")
                 temporary.replace(target)
             elif os.name == "nt":
                 # Windows rename refuses an existing target, unlike POSIX rename.

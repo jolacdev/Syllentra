@@ -1,5 +1,7 @@
 """Protect recursive selection, path reservation, and safe artifact publication."""
 
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -61,7 +63,15 @@ class BatchFilesTests(unittest.TestCase):
 
     def test_directory_links_are_not_traversed(self) -> None:
         """A recursive link must not duplicate files or keep discovery running indefinitely."""
-        (self.child / "cycle").symlink_to(self.sources, target_is_directory=True)
+        link = self.child / "cycle"
+        if os.name == "nt":
+            subprocess.run(
+                ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(self.sources)],
+                check=True,
+                capture_output=True,
+            )
+        else:
+            link.symlink_to(self.sources, target_is_directory=True)
         self._scan(self.sources)
         self.assertEqual(len(self.files.snapshot()["items"]), 2)
 
@@ -138,6 +148,27 @@ class BatchFilesTests(unittest.TestCase):
         self.assertIn("00:00:00,000 --> 00:00:01,500", target.read_text())
         with self.assertRaises(FileExistsError):
             self.exports.write(approved, self.result)
+
+    def test_export_changes_only_the_authorized_subtitle(self) -> None:
+        """An external PDF, image, recording, and hard-linked subtitle must retain their bytes."""
+        self._scan(self.child / "interview.wav")
+        pdf = self.child / "interview.pdf"
+        image = self.child / "interview.png"
+        pdf.write_bytes(b"original document")
+        image.write_bytes(b"original image")
+        target = self.child / "interview.srt"
+        os.link(pdf, target)
+        plan = self.exports.prepare(self.files.snapshot(), self.settings)
+        output = plan["items"][0]["outputs"][0]
+        with self.assertRaisesRegex(ValueError, "without other links"):
+            self.exports.resolve(plan, [output["id"]], "overwrite")
+        renamed = self.exports.resolve(plan, [output["id"]], "rename")
+        self.exports.write(renamed["items"][0]["outputs"][0], self.result)
+        self.assertEqual(pdf.read_bytes(), b"original document")
+        self.assertTrue(target.samefile(pdf))
+        self.assertEqual(image.read_bytes(), b"original image")
+        self.assertEqual((self.child / "interview.wav").read_bytes(), b"other media")
+        self.assertTrue((self.child / "interview (2).srt").is_file())
 
     def test_changed_source_invalidates_preflight(self) -> None:
         """A source fingerprint change must require refreshed metadata before inference."""

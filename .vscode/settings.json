@@ -45,7 +45,7 @@
   "workbench.editor.focusRecentEditorAfterClose": false, // Closing a tab will focus the tab to the right.
   "git.allowForcePush": true,
   // Visuals (Theme, Icons, Editor)
-  "workbench.colorTheme": "One Dark Pro Flat",
+  "workbench.colorTheme": "One Dark Pro",
   "workbench.iconTheme": "vscode-jetbrains-icon-theme-2023-dark",
   "editor.cursorBlinking": "smooth",
   "editor.guides.bracketPairs": true,

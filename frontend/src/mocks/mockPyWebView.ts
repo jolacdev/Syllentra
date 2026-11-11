@@ -236,7 +236,6 @@ export const createPyWebViewMock = () => {
     },
     modelLocation: {
       dataDirectory: '/Preview/Syllentra Data',
-      downloadDirectory: '/Preview/Models',
       path: '/Preview/Models/model_phonon25_f25x1_48k_int6',
     },
     preferences: {
@@ -375,7 +374,6 @@ export const createPyWebViewMock = () => {
       populate();
       return success();
     },
-    backup_model: () => Promise.resolve({ error: null }),
     bind_dropzone: () => Promise.resolve(false),
     cancel_current: (batchId, itemId) => {
       if (state.batch.id === batchId && state.batch.activeItemId === itemId) {
@@ -408,7 +406,6 @@ export const createPyWebViewMock = () => {
       emit();
       return success();
     },
-    choose_model_storage: () => Promise.resolve({ error: null }),
     get_state: () => Promise.resolve(structuredClone(state)),
     get_transcript: (itemId) => {
       const result = results.get(itemId);

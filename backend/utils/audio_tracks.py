@@ -7,6 +7,7 @@ import av
 from schemas.batch import AudioSelection
 from utils.language_utils import normalize_language
 from utils.matroska_languages import matroska_languages
+from utils.media_utils import open_recording
 
 
 def resolve_audio(selection: AudioSelection, preferred_language: str | None) -> AudioSelection:
@@ -48,7 +49,7 @@ def inspect_audio(source: Path, preferred_language: str | None) -> AudioSelectio
         "probeError": None,
     }
     try:
-        with av.open(str(source)) as container:
+        with open_recording(source) as container:
             streams = list(container.streams.audio)
             modern = matroska_languages(source)
             if modern is not None and len(modern) != len(streams):

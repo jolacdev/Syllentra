@@ -24,21 +24,13 @@ Silence produces no empty outputs. Recoverable file errors allow the queue to co
 
 ## Models and portable storage
 
-Settings shows the active model path and download storage folder:
-
-- **Use local model** verifies and references an existing `model_phonon25_f25x1_48k_int6` folder in place, without copying or downloading.
-- **Choose download folder** switches storage without moving or deleting older copies. Downloads use `speech/FermionResearch__Phonon-2.5/model_phonon25_f25x1_48k_int6` within that folder. Choose a download folder before downloading a replacement for an externally referenced model.
-- **Back up model** creates a verified folder containing the model assets and attribution. Transfer it to another machine and select it with **Use local model**. Existing backups are preserved.
+Downloads and local imports use the same folder under `Syllentra Data/models`. In Settings, **Import local model** copies the required Phonon-2.5 files from a `model_phonon25_f25x1_48k_int6` folder and checks their SHA-256 hashes before installing them. Syllentra reuses a verified installation and reports an error if an incomplete or unrelated entry occupies its location.
 
 ### Portable by default
 
 Syllentra automatically creates **Syllentra Data** next to the application for settings, logs, and downloaded models. Move the application and this folder together. Settings shows the active data and model folders.
 
-Existing settings are copied on first use; existing models stay in place. To take an older or external model with you, use **Back up model** to save it inside `Syllentra Data`, then select the backup with **Use local model**. Existing portable data is reused without importing system settings again.
-
-If portable storage cannot be created or written to, Syllentra uses the normal **PyWhisper Studio** system data folder. Move the application to a writable location and relaunch to use portable storage.
-
-`SYLLENTRA_DATA_DIR` overrides storage; `PYWHISPER_DATA_DIR` remains supported. These overrides bypass automatic migration. Original system data is preserved.
+Legacy interface settings are copied on first use. If an older installation used a model elsewhere, select its folder with **Import local model**. Run the portable app from a writable location.
 
 ## Development
 

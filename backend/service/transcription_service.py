@@ -107,8 +107,7 @@ class TranscriptionService:
             "revision": 0,
             "collectionRevision": 0,
             "modelInfo": engine.get_info(),
-            "modelLocation": location
-            or {"path": "", "downloadDirectory": "", "dataDirectory": str(directory)},
+            "modelLocation": location or {"path": "", "dataDirectory": str(directory)},
             "preferences": preferences,
             "exportSettings": default_exports(),
             "scan": empty_scan(),
@@ -634,8 +633,8 @@ class TranscriptionService:
             for output in item["outputs"]:
                 if output["id"] == artifact_id and output["status"] == "written":
                     path = Path(output["path"])
-                    if not path.is_file():
-                        raise ValueError("The generated output was moved or deleted.")
+                    if not path.is_file() or path.resolve() != path or path.stat().st_nlink != 1:
+                        raise ValueError("The generated output is missing or linked to another file.")
                     return path
         raise ValueError("This generated output is not available.")
 

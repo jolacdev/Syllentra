@@ -516,6 +516,9 @@ describe('batch workspace', () => {
         'Completed transcripts are exported automatically',
       ),
     );
+    expect(
+      screen.getByText('Text copied to the clipboard.'),
+    ).toBeInTheDocument();
   });
 
   it('retains completed results only while the effective audio track stays the same', async () => {
@@ -558,19 +561,46 @@ describe('batch workspace', () => {
     await act(async () =>
       fireEvent.click(screen.getByRole('treeitem', { name: /Opening notes/ })),
     );
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Expand transcript preview' }),
-      );
+    const expand = screen.getByRole('button', {
+      name: 'Expand transcript preview',
     });
+    expand.focus();
+    await act(async () => fireEvent.click(expand));
     const dialog = screen.getByRole('dialog', { name: 'Transcript preview' });
+    const reader = within(dialog).getByRole('region', {
+      name: 'Transcript preview',
+    });
     expect(
-      within(dialog).getByText('This is a simulated transcript.'),
+      within(reader).getByText('This is a simulated transcript.'),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole('heading', {
+        name: 'File details',
+      }),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole('button', { name: 'Open SRT output' }),
+    ).toBeVisible();
+    const copy = within(dialog).getByRole('button', { name: 'Copy text' });
+    const copyIcon = copy.querySelector('svg path')?.getAttribute('d');
+    await act(async () => fireEvent.click(copy));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('This is a simulated transcript.'),
+    );
+    expect(
+      within(dialog).getByText('Text copied to the clipboard.'),
     ).toBeInTheDocument();
+    expect(copy.querySelector('svg path')).toHaveAttribute('d', copyIcon);
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(
+      new Error('Clipboard unavailable'),
+    );
+    await act(async () => fireEvent.click(copy));
+    expect(within(dialog).getByText('Could not copy')).toBeInTheDocument();
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Close expanded preview' }),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(expand).toHaveFocus();
     expect(
       screen.getByRole('tree', { name: 'Recordings' }),
     ).toBeInTheDocument();

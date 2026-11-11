@@ -27,7 +27,6 @@ class BridgeLifecycleTests(unittest.TestCase):
             directory,
             {
                 "path": r"C:\Users\O'Brien\Español\model",
-                "downloadDirectory": r"C:\new\test",
                 "dataDirectory": str(directory),
             },
         )

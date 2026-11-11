@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
 import Button from '@components/Button';
@@ -120,14 +119,6 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
   /** Inspect an item without changing its inclusion or switching away from the queue. */
   const inspect = (id: string) => {
     setInspectedId(id);
-  };
-
-  /** Copy original transcript text and surface clipboard failures through the command boundary. */
-  const copy = (text: string) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => toast.success(t('transcript.copiedNotice')))
-      .catch(reportError);
   };
 
   /** Apply the same per-file command from the sidebar and expanded inspector. */
@@ -543,7 +534,7 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
             <ResultInspector
               isEditingDisabled={isEditingDisabled}
               item={inspected}
-              onCopy={copy}
+              onCopyError={reportError}
               onExpand={() => setIsPreviewExpanded(true)}
               onOpen={(id, reveal) =>
                 act('open', () => api.open_artifact(id, reveal))
@@ -668,24 +659,21 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
       </main>
       {isPreviewExpanded && inspected && (
         <Modal
+          closeLabel={t('batch.closePreview')}
           isWide
           title={t('batch.previewTitle')}
           onClose={() => setIsPreviewExpanded(false)}
         >
-          <Button className="mt-3" onClick={() => setIsPreviewExpanded(false)}>
-            {t('batch.closePreview')}
-          </Button>
-          <div className="flex h-[70dvh] min-h-0 flex-col">
-            <ResultInspector
-              isEditingDisabled={isEditingDisabled}
-              item={inspected}
-              onCopy={copy}
-              onOpen={(id, reveal) =>
-                act('open', () => api.open_artifact(id, reveal))
-              }
-              onSelectTrack={selectAudioTrack}
-            />
-          </div>
+          <ResultInspector
+            isEditingDisabled={isEditingDisabled}
+            isExpanded
+            item={inspected}
+            onCopyError={reportError}
+            onOpen={(id, reveal) =>
+              act('open', () => api.open_artifact(id, reveal))
+            }
+            onSelectTrack={selectAudioTrack}
+          />
         </Modal>
       )}
       {plan && (
@@ -836,12 +824,6 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
               <code className="text-ink/65 mt-1 block text-xs break-all">
                 {state.modelLocation.path}
               </code>
-              <p className="mt-3 text-xs font-medium">
-                {t('batch.downloadLocation')}
-              </p>
-              <code className="text-ink/65 mt-1 block text-xs break-all">
-                {state.modelLocation.downloadDirectory}
-              </code>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   disabled={isEditingDisabled || pending.has('model-files')}
@@ -850,24 +832,6 @@ const BatchWorkspaceScreen = ({ controller }: BatchWorkspaceScreenProps) => {
                   }
                 >
                   {t('batch.useLocalModel')}
-                </Button>
-                <Button
-                  disabled={isEditingDisabled || pending.has('model-files')}
-                  onClick={() =>
-                    act('model-files', () => api.choose_model_storage())
-                  }
-                >
-                  {t('batch.chooseModelStorage')}
-                </Button>
-                <Button
-                  disabled={
-                    isEditingDisabled ||
-                    !isModelReady ||
-                    pending.has('model-files')
-                  }
-                  onClick={() => act('model-files', () => api.backup_model())}
-                >
-                  {t('batch.backupModel')}
                 </Button>
               </div>
               <a

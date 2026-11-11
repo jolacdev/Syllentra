@@ -104,16 +104,15 @@ class WorkerTests(unittest.TestCase):
             member.write_bytes(b"damaged")
             self.assertFalse(self.engine.is_ready())
 
-    def test_failed_repair_restores_previous_cache(self) -> None:
-        """An interrupted explicit repair must preserve the original app-owned assets."""
+    def test_setup_leaves_occupied_directory_untouched(self) -> None:
+        """Setup must preserve an occupied model directory without starting a download."""
         self.engine.model_path.mkdir(parents=True)
         member = self.engine.model_path / "model.fermion"
         member.write_bytes(b"damaged")
-        with (
-            patch.object(self.engine, "_execute", side_effect=CancelledError),
-            self.assertRaises(CancelledError),
-        ):
-            self.engine.setup(Event(), ignore_phase)
+        with patch.object(self.engine, "_execute") as execute:
+            with self.assertRaises(FileExistsError):
+                self.engine.setup(Event(), ignore_phase)
+            execute.assert_not_called()
         self.assertEqual(member.read_bytes(), b"damaged")
 
 

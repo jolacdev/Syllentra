@@ -23,7 +23,7 @@ TranscriptionService → TranscriptionEngine → PhononEngine
 | `ExportService` | Concrete preflight paths, existing/intra-batch conflict handling, shared rename stems, source fingerprints, and independent atomic artifact commits. |
 | `ResultService` | Immutable session JSON, known-ID lookup, and preview pages of at most 200 cues. Full copy text accompanies only the first page. |
 | `PreferencesService` | Versioned interface and optional multi-track audio-language preferences, one-time legacy backup, and atomic replacement. |
-| `ModelStorageService` | Verified external model references, persisted locations, chosen download roots, and verified backups containing only pinned assets plus attribution. |
+| `ModelStorageService` | Portable model location and offline import of verified model assets. |
 | `TranscriptionService` | Exclusive admission to scan/setup/planning/processing, frozen queue plans, sequential execution, cancellation, outcome counts, export retries, and close coordination. |
 
 Completed inference is retained before export. A failed export can retry without the source or another inference pass. Cancellation uses batch and item IDs so a stale request cannot affect a successor. Model-loading failures halt pending work; recoverable recording failures do not.
@@ -52,7 +52,7 @@ Exports use temporary sibling files and independent atomic publication. Overwrit
 
 `BatchWorkspaceScreen` composes selection, exports, queue controls, previews, and dialogs. Inclusion, expansion, keyboard focus, and inspection are separate. The tree renders expanded branches with ARIA hierarchy metadata and roving keyboard focus. Expanded preview uses a wide native dialog; one conflict action applies to each recording's existing output set.
 
-Queue state, export choices, and previews are session scoped. Settings and model locations persist in automatically created portable storage. First initialization atomically copies legacy settings and rebases model references without copying weights. Existing portable data wins; initialization/write failures use system storage, and environment overrides bypass migration. Settings shows the active data directory. See [portable storage](../README.md#portable-by-default).
+Queue state, export choices, and previews are session scoped. Settings and models live in `Syllentra Data` beside the portable application. Initial setup copies legacy interface settings. Downloads and imports stage and verify the model inside the portable model directory before publishing it. See [portable storage](../README.md#portable-by-default).
 
 ## Packaging
 

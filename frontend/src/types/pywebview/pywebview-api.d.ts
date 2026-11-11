@@ -31,7 +31,6 @@ export type ModelInfo = {
 
 export type ModelLocation = {
   path: string;
-  downloadDirectory: string;
   dataDirectory: string;
 };
 
@@ -193,8 +192,6 @@ export interface PyWebViewApi {
   add_files(): Promise<CommandReply>;
   /** Add a source folder recursively using the native folder picker. */
   add_folder(): Promise<CommandReply>;
-  /** Export a verified model folder to a selected destination for offline machines. */
-  backup_model(): Promise<CommandReply>;
   /** Bind the stable workspace drop region while keeping native pickers available on failure. */
   bind_dropzone(): Promise<boolean>;
   /** Cancel the identified active item without affecting its successor. */
@@ -205,8 +202,6 @@ export interface PyWebViewApi {
   cancel_setup(): Promise<CommandReply>;
   /** Choose one custom export destination without requesting a Save dialog per output. */
   choose_destination(): Promise<CommandReply>;
-  /** Choose the directory used for future model downloads without deleting existing copies. */
-  choose_model_storage(): Promise<CommandReply>;
   /** Hydrate frontend state without admitting or restarting work. */
   get_state(): Promise<BatchAppState>;
   /** Read one bounded page of a completed, immutable session transcript. */
@@ -241,7 +236,7 @@ export interface PyWebViewApi {
   start_batch(plan_id: string): Promise<CommandReply>;
   /** Cancel active and queued work while retaining every committed artifact. */
   stop_batch(batch_id: string): Promise<CommandReply>;
-  /** Select a verified local Phonon folder for completely offline first use. */
+  /** Import a verified local Phonon folder into the portable installation. */
   use_local_model(): Promise<CommandReply>;
 }
 

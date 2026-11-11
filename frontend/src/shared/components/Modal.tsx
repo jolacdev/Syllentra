@@ -1,10 +1,15 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 
+import { cn } from '@utils/cn';
+
+import Button from './Button';
+
 type ModalProps = {
   initialFocusId?: string;
   children: ReactNode;
   title: string;
+  closeLabel?: string;
   isDismissible?: boolean;
   isWide?: boolean;
   onClose: () => void;
@@ -14,6 +19,7 @@ type ModalProps = {
 const Modal = ({
   initialFocusId = undefined,
   children,
+  closeLabel = undefined,
   onClose,
   title,
   isDismissible = true,
@@ -39,8 +45,12 @@ const Modal = ({
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
-      className="border-ink/15 bg-surface text-ink backdrop:bg-ink/40 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border p-6 shadow-xl"
-      style={{ maxWidth: isWide ? 1200 : 672 }}
+      className={cn(
+        'border-ink/15 bg-surface text-ink backdrop:bg-ink/40 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] rounded-2xl border shadow-xl',
+        isWide
+          ? 'h-[calc(100dvh-2rem)] max-w-[1200px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden open:grid'
+          : 'max-w-2xl overflow-y-auto p-6',
+      )}
       onCancel={(event) => {
         event.preventDefault();
         if (isDismissible) {
@@ -48,9 +58,26 @@ const Modal = ({
         }
       }}
     >
-      <h2 className="text-xl font-semibold tracking-tight" id={titleId}>
-        {title}
-      </h2>
+      <header
+        className={cn(
+          'flex items-center justify-between gap-3',
+          isWide && 'border-ink/10 border-b px-4 py-2 sm:px-6',
+        )}
+      >
+        <h2 className="text-xl font-semibold tracking-tight" id={titleId}>
+          {title}
+        </h2>
+        {closeLabel && (
+          <Button
+            aria-label={closeLabel}
+            className="size-10 shrink-0 p-0"
+            icon="close"
+            title={closeLabel}
+            variant="ghost"
+            onClick={onClose}
+          />
+        )}
+      </header>
       {children}
     </dialog>
   );
